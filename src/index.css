@@ -4,64 +4,65 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    /* 柠檬橄榄 palette — bg #f7ffe4 / text #5C693D / accent #c4c800 / dark #1f2611 */
+    --background: 78 100% 95%;
+    --foreground: 78 27% 26%;
+    --card: 74 100% 97%;
+    --card-foreground: 78 27% 26%;
+    --popover: 74 100% 97%;
+    --popover-foreground: 78 27% 26%;
+    --primary: 61 100% 39%;
+    --primary-foreground: 80 38% 11%;
+    --secondary: 73 62% 90%;
+    --secondary-foreground: 79 27% 26%;
+    --muted: 73 62% 90%;
+    --muted-foreground: 73 19% 45%;
+    --accent: 61 100% 39%;
+    --accent-foreground: 80 38% 11%;
+    --destructive: 6 78% 52%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 75 45% 82%;
+    --input: 75 45% 78%;
+    --ring: 61 100% 39%;
+    --radius: 0.75rem;
+    --sidebar-background: 74 100% 97%;
+    --sidebar-foreground: 78 27% 26%;
+    --sidebar-primary: 61 100% 39%;
+    --sidebar-primary-foreground: 80 38% 11%;
+    --sidebar-accent: 73 62% 90%;
+    --sidebar-accent-foreground: 79 27% 26%;
+    --sidebar-border: 75 45% 82%;
+    --sidebar-ring: 61 100% 39%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 80 38% 9%;
+    --foreground: 78 40% 88%;
+    --card: 80 30% 13%;
+    --card-foreground: 78 40% 88%;
+    --popover: 80 30% 13%;
+    --popover-foreground: 78 40% 88%;
+    --primary: 61 100% 45%;
+    --primary-foreground: 80 38% 11%;
+    --secondary: 78 20% 20%;
+    --secondary-foreground: 78 40% 88%;
+    --muted: 78 20% 20%;
+    --muted-foreground: 73 15% 60%;
+    --accent: 61 100% 45%;
+    --accent-foreground: 80 38% 11%;
+    --destructive: 6 70% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 78 20% 24%;
+    --input: 78 20% 28%;
+    --ring: 61 100% 45%;
+    --sidebar-background: 80 30% 11%;
+    --sidebar-foreground: 78 40% 88%;
+    --sidebar-primary: 61 100% 45%;
+    --sidebar-primary-foreground: 80 38% 11%;
+    --sidebar-accent: 78 20% 20%;
+    --sidebar-accent-foreground: 78 40% 88%;
+    --sidebar-border: 78 20% 24%;
+    --sidebar-ring: 61 100% 45%;
   }
 }
 
@@ -71,5 +72,21 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+      "Noto Sans SC", sans-serif;
   }
+}
+
+/* 倒计时数字：等宽数字，列对齐不跳动 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 大写小标签：参考系的排版手法 */
+.label-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
