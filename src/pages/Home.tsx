@@ -30,6 +30,7 @@ const LOADING_LINES = [
 
 export default function Home() {
   const me = trpc.schedule.me.useQuery(undefined, { retry: false, staleTime: 60_000 });
+  const [adminOverride, setAdminOverride] = useState(false);
 
   if (me.isLoading) {
     return (
@@ -38,12 +39,27 @@ export default function Home() {
       </div>
     );
   }
-  if (!me.data) return <LoginView />;
+  // 只有教务身份（有学号）才能直接进 App；Kimi 管理员身份落在登录页，需显式进入
+  const isStudent = !!me.data?.studentId;
+  if (!me.data || (!isStudent && !adminOverride)) {
+    return (
+      <LoginView
+        kimiUser={me.data && !isStudent ? me.data : null}
+        onEnterAdmin={() => setAdminOverride(true)}
+      />
+    );
+  }
   return <AuthedApp />;
 }
 
 /** 教务账密登录页：进度条 + 轮播梗 */
-function LoginView() {
+function LoginView({
+  kimiUser,
+  onEnterAdmin,
+}: {
+  kimiUser: { name: string | null; role: string } | null;
+  onEnterAdmin: () => void;
+}) {
   const utils = trpc.useUtils();
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
@@ -166,6 +182,14 @@ function LoginView() {
               <br />
               课表只存在你自己的账号下，换设备重新登录
             </p>
+            {kimiUser && (
+              <button
+                onClick={onEnterAdmin}
+                className="mx-auto block text-xs text-muted-foreground/70 underline underline-offset-2"
+              >
+                管理员入口（{kimiUser.name ?? "Kimi"}）
+              </button>
+            )}
           </div>
         )}
       </div>
