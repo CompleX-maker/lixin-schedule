@@ -34,15 +34,32 @@
 
 ## 部署
 
+### 自部署（自己的服务器）
+
 ```bash
+git clone https://github.com/CompleX-maker/lixin-schedule.git
+cd lixin-schedule
 npm install
-cp .env.example .env   # 配置 DATABASE_URL / APP_SECRET 等
-npm run db:push
+npm run db:push     # 初始化数据库表
 npm run build
-npm start              # 生产模式（含定时同步与提醒调度器）
+npm start           # 生产模式（含定时同步与提醒调度器）
 ```
 
-邮件提醒需在管理员配置中设置 SMTP（QQ 邮箱授权码），或使用 Server酱。
+`.env` 参考（自部署时 Kimi 相关的变量填占位值即可，Kimi 登录不会启用）：
+
+```bash
+DATABASE_URL=mysql://user:pass@127.0.0.1:3306/lixin_schedule
+APP_SECRET=<随机长字符串，用于密码加密与会话签名，改了就全掉线>
+APP_ID=selfhost
+KIMI_AUTH_URL=https://example.invalid
+KIMI_OPEN_URL=https://example.invalid
+VITE_APP_ID=selfhost
+VITE_KIMI_AUTH_URL=https://example.invalid
+ADMIN_STUDENT_IDS=251650330   # 这些学号登录后自动成为管理员（逗号分隔）
+PORT=3000
+```
+
+需要 HTTPS 时建议前面挂 Nginx / Caddy 反代到 3000 端口。邮件提醒需在管理员配置中设置 SMTP（QQ 邮箱授权码），或使用 Server酱。
 
 ## 免责声明
 

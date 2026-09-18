@@ -18,6 +18,7 @@ import {
   recentFetchLogs,
   replaceCourses,
   setSetting,
+  setUserRole,
   upsertBinding,
   upsertReminder,
 } from "./queries/schedule";
@@ -49,6 +50,12 @@ async function loginAndSync(studentId: string, password: string) {
   });
   const user = await findUserByUnionId(`jw:${studentId}`);
   if (!user) throw new Error("建档失败");
+
+  // 自部署场景：ADMIN_STUDENT_IDS=学号1,学号2 指定的账号自动成为管理员
+  const adminIds = (process.env.ADMIN_STUDENT_IDS ?? "").split(/[,，\s]+/).filter(Boolean);
+  if (adminIds.includes(studentId) && user.role !== "admin") {
+    await setUserRole(user.id, "admin");
+  }
 
   await upsertBinding(user.id, {
     studentId,

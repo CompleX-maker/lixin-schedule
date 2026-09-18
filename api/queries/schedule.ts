@@ -111,6 +111,11 @@ export async function listAllReminders() {
   return getDb().select().from(schema.reminderSettings);
 }
 
+/** 自部署场景：把指定学号的用户设为管理员（ADMIN_STUDENT_IDS 环境变量） */
+export async function setUserRole(userId: number, role: "user" | "admin") {
+  await getDb().update(schema.users).set({ role }).where(eq(schema.users.id, userId));
+}
+
 export async function addFetchLog(
   userId: number,
   kind: string,
