@@ -113,6 +113,10 @@ async function syncTick() {
       try {
         const outcome = await fetchSchedule(b.studentId, decryptSecret(b.passwordEnc), cfg.semester);
         await replaceCourses(b.userId, cfg.semester, outcome.courses);
+        if (outcome.extracted) {
+          const next = { ...cfg, startDate: outcome.extracted.beginOn, periodTimes: outcome.extracted.periodTimes };
+          if (next.startDate !== cfg.startDate) await setSetting("semesterConfig", JSON.stringify(next));
+        }
         if (outcome.student) {
           await upsertBinding(b.userId, {
             studentId: b.studentId,

@@ -29,7 +29,7 @@ async function loadSemesterConfig(): Promise<SemesterConfig> {
 }
 
 /** 抓取并落库；失败时记录日志并更新绑定状态。返回课程数。 */
-async function syncUser(userId: number): Promise<{ count: number; hit?: string }> {
+async function syncUser(userId: number): Promise<{ count: number }> {
   const binding = await getBinding(userId);
   if (!binding) throw new Error("尚未绑定教务账号");
   const cfg = await loadSemesterConfig();
@@ -37,6 +37,13 @@ async function syncUser(userId: number): Promise<{ count: number; hit?: string }
   try {
     const outcome = await fetchSchedule(binding.studentId, password, cfg.semester);
     await replaceCourses(userId, cfg.semester, outcome.courses);
+    // 用教务系统提取的开学日期/节次时间自动校准全局配置
+    if (outcome.extracted) {
+      const next = { ...cfg, startDate: outcome.extracted.beginOn, periodTimes: outcome.extracted.periodTimes };
+      if (next.startDate !== cfg.startDate || next.periodTimes.join() !== cfg.periodTimes.join()) {
+        await setSetting("semesterConfig", JSON.stringify(next));
+      }
+    }
     if (outcome.student) {
       await upsertBinding(userId, {
         studentId: binding.studentId,
@@ -46,8 +53,8 @@ async function syncUser(userId: number): Promise<{ count: number; hit?: string }
       });
     }
     await markBindingStatus(userId, "active", null);
-    await addFetchLog(userId, "schedule", true, `同步成功：${outcome.courses.length} 条课程（命中 ${outcome.hit}）`);
-    return { count: outcome.courses.length, hit: outcome.hit };
+    await addFetchLog(userId, "schedule", true, `同步成功：${outcome.courses.length} 条课程`);
+    return { count: outcome.courses.length };
   } catch (e) {
     const isAuth = e instanceof LixinAuthError;
     const msg = e instanceof Error ? e.message : String(e);
