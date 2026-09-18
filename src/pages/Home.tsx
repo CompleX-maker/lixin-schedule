@@ -253,10 +253,12 @@ function AuthedApp() {
         </AnimatePresence>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-10">
         <div className="mx-auto max-w-lg">
           <QuipTicker />
-          <div className="flex px-2 pb-1 pt-0.5">
+        </div>
+        <nav className="border-t bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-lg px-2 pb-1 pt-0.5">
             {TABS.map(({ key, label, icon: Icon }) => {
               const active = tab === key;
               return (
@@ -291,8 +293,8 @@ function AuthedApp() {
               );
             })}
           </div>
-        </div>
-      </nav>
+        </nav>
+      </div>
     </div>
   );
 }

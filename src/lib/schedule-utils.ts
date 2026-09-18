@@ -18,6 +18,11 @@ export function courseColor(name: string) {
   return COURSE_COLORS[h % COURSE_COLORS.length];
 }
 
+/** 课程备注的稳定 key：内容标识，课表同步重建行后仍能对应上 */
+export function courseKey(c: Pick<Course, "courseName" | "dayOfWeek" | "startSection" | "endSection">) {
+  return `${c.courseName}|${c.dayOfWeek}|${c.startSection}|${c.endSection}`;
+}
+
 /** 由学期开始日期（第一周周一）算当前周次 */
 export function weekOf(startDate: string, date = new Date()): number {
   const start = new Date(startDate + "T00:00:00").getTime();

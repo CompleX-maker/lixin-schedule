@@ -4,7 +4,7 @@ import { QUIPS } from "@/lib/quips";
 
 const INTERVAL = 5000;
 
-/** dock 栏上方的段子轮播条：每 5 秒一条，上滑淡入切换 */
+/** dock 栏上方悬浮的段子药丸：每 5 秒一条，上滑淡入切换 */
 export function QuipTicker() {
   const [idx, setIdx] = useState(() => Math.floor(Math.random() * QUIPS.length));
 
@@ -14,19 +14,21 @@ export function QuipTicker() {
   }, []);
 
   return (
-    <div className="flex h-7 items-center justify-center overflow-hidden border-b border-border/60">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.p
-          key={idx}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="truncate px-6 text-[11px] text-muted-foreground/80"
-        >
-          {QUIPS[idx]}
-        </motion.p>
-      </AnimatePresence>
+    <div className="pointer-events-none flex justify-center px-6 pb-2.5">
+      <div className="flex h-9 max-w-full items-center overflow-hidden rounded-full border border-border/70 bg-card/90 px-4 shadow-sm backdrop-blur">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={idx}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="truncate text-[13px] text-muted-foreground"
+          >
+            {QUIPS[idx]}
+          </motion.p>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

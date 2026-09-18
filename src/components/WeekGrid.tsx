@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Course, SemesterConfig } from "@contracts/types";
-import { courseColor, dayLabel, fmtDate, weekDateRange } from "@/lib/schedule-utils";
+import { courseColor, courseKey, dayLabel, fmtDate, weekDateRange } from "@/lib/schedule-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/providers/trpc";
+import { ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const SECTIONS = 12;
@@ -25,6 +27,22 @@ export function WeekGrid({
   setWeek: (w: number) => void;
 }) {
   const [selected, setSelected] = useState<Course | null>(null);
+  // 课程备注
+  const utils = trpc.useUtils();
+  const notesQuery = trpc.schedule.notes.useQuery();
+  const noteMap = useMemo(
+    () => new Map((notesQuery.data ?? []).map((n) => [n.courseKey, n.note])),
+    [notesQuery.data],
+  );
+  const saveNote = trpc.schedule.saveNote.useMutation({
+    onSuccess: () => utils.schedule.notes.invalidate(),
+  });
+  const [draft, setDraft] = useState("");
+  // 打开弹窗时装载该课已有备注
+  useEffect(() => {
+    setDraft(selected ? (noteMap.get(courseKey(selected)) ?? "") : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
   // 周切换方向：决定网格滑入/滑出方向
   const dirRef = useRef(0);
   const goWeek = (target: number) => {
@@ -151,13 +169,20 @@ export function WeekGrid({
                     <div key={d} className="flex min-h-[64px] gap-0.5 border-r p-0.5 last:border-r-0">
                       {slot.map((c) => {
                         const col = courseColor(c.courseName);
+                        const hasNote = noteMap.has(courseKey(c));
                         return (
                           <button
                             key={c.id}
                             onClick={() => setSelected(c)}
-                            className="flex-1 rounded-md border-l-[3px] px-1 py-1 text-left transition-transform active:scale-95"
+                            className="relative flex-1 rounded-md border-l-[3px] px-1 py-1 text-left transition-transform active:scale-95"
                             style={{ background: col.bg, borderColor: col.border, color: col.text }}
                           >
+                            {hasNote && (
+                              <StickyNote
+                                className="absolute right-0.5 top-0.5 h-2.5 w-2.5 opacity-70"
+                                strokeWidth={2.5}
+                              />
+                            )}
                             <div className="line-clamp-3 text-[10px] font-semibold leading-tight">
                               {c.courseName}
                             </div>
@@ -212,6 +237,34 @@ export function WeekGrid({
                   </div>
                 )}
               </dl>
+              {/* 备注：跨同步保留，清空即删除 */}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <StickyNote className="h-3.5 w-3.5" />
+                  备注
+                </div>
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="比如：作业 DDL、考试范围、要带的东西…"
+                  rows={3}
+                  maxLength={500}
+                  className="resize-none text-sm"
+                />
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={
+                    saveNote.isPending ||
+                    draft.trim() === (noteMap.get(courseKey(selected)) ?? "")
+                  }
+                  onClick={() =>
+                    saveNote.mutate({ courseKey: courseKey(selected), note: draft })
+                  }
+                >
+                  {saveNote.isPending ? "保存中…" : draft.trim() ? "保存备注" : "清除备注"}
+                </Button>
+              </div>
             </>
           )}
         </DialogContent>

@@ -44,6 +44,7 @@ export async function markBindingStatus(
 export async function deleteBinding(userId: number) {
   await getDb().delete(schema.jwBindings).where(eq(schema.jwBindings.userId, userId));
   await getDb().delete(schema.courses).where(eq(schema.courses.userId, userId));
+  await getDb().delete(schema.courseNotes).where(eq(schema.courseNotes.userId, userId));
 }
 
 export async function replaceCourses(
@@ -66,6 +67,28 @@ export async function getCourses(userId: number, semester: string) {
     .select()
     .from(schema.courses)
     .where(and(eq(schema.courses.userId, userId), eq(schema.courses.semester, semester)));
+}
+
+/** 课程备注：courseKey = courseName|dayOfWeek|startSection|endSection（内容稳定，跨同步存活） */
+export async function listNotes(userId: number) {
+  return getDb()
+    .select()
+    .from(schema.courseNotes)
+    .where(eq(schema.courseNotes.userId, userId));
+}
+
+/** 保存/删除备注：note 为空字符串时删除该条 */
+export async function upsertNote(userId: number, courseKey: string, note: string) {
+  if (!note.trim()) {
+    await getDb()
+      .delete(schema.courseNotes)
+      .where(and(eq(schema.courseNotes.userId, userId), eq(schema.courseNotes.courseKey, courseKey)));
+    return;
+  }
+  await getDb()
+    .insert(schema.courseNotes)
+    .values({ userId, courseKey, note: note.trim() })
+    .onDuplicateKeyUpdate({ set: { note: note.trim() } });
 }
 
 export async function getSetting(key: string): Promise<string | null> {

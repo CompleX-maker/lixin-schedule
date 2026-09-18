@@ -14,12 +14,14 @@ import {
   getCourses,
   getReminder,
   getSetting,
+  listNotes,
   markBindingStatus,
   recentFetchLogs,
   replaceCourses,
   setSetting,
   setUserRole,
   upsertBinding,
+  upsertNote,
   upsertReminder,
 } from "./queries/schedule";
 
@@ -237,6 +239,21 @@ export const scheduleRouter = createRouter({
 
   /** 最近抓取日志（含接口样本） */
   logs: authedQuery.query(({ ctx }) => recentFetchLogs(ctx.user.id, 5)),
+
+  /** 课程备注：key = courseName|dayOfWeek|startSection|endSection */
+  notes: authedQuery.query(({ ctx }) => listNotes(ctx.user.id)),
+
+  saveNote: authedQuery
+    .input(
+      z.object({
+        courseKey: z.string().min(1).max(255),
+        note: z.string().max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await upsertNote(ctx.user.id, input.courseKey, input.note);
+      return { ok: true };
+    }),
 
   /** 管理员：查看/设置 SMTP 发信配置（QQ邮箱授权码） */
   mailConfig: adminQuery.query(async () => {

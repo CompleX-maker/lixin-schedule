@@ -9,6 +9,7 @@ import {
   int,
   boolean,
   json,
+  uniqueIndex,
 
 } from "drizzle-orm/mysql-core";
 
@@ -79,6 +80,29 @@ export const courses = mysqlTable("courses", {
 });
 
 export type Course = typeof courses.$inferSelect;
+
+/**
+ * 课程备注：按内容 key（courseName|dayOfWeek|startSection|endSection）挂在用户名下。
+ * 课表每次同步会整批重建 courses 行，备注独立成表才能在同步后存活。
+ */
+export const courseNotes = mysqlTable(
+  "course_notes",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    courseKey: varchar("courseKey", { length: 255 }).notNull(),
+    note: text("note").notNull(),
+    updatedAt: timestamp("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("uq_note_user_course").on(t.userId, t.courseKey)],
+);
+
+export type CourseNote = typeof courseNotes.$inferSelect;
 
 /** 全局配置（学期开始日期、当前学期、节次时间、公告等），管理员可改 */
 export const appSettings = mysqlTable("app_settings", {
