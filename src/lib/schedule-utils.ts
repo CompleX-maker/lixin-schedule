@@ -23,6 +23,21 @@ export function courseKey(c: Pick<Course, "courseName" | "dayOfWeek" | "startSec
   return `${c.courseName}|${c.dayOfWeek}|${c.startSection}|${c.endSection}`;
 }
 
+/** 一节课的结束时间：开始时间 + 45 分钟 */
+export function periodEnd(start: string, mins = 45): string {
+  const [h, m] = start.split(":").map(Number);
+  const t = h * 60 + m + mins;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** 周次是否全部为单周/双周（用于课程块角标）；跨单双则返回 null */
+export function weeksBadge(weeks: number[]): "单" | "双" | null {
+  if (weeks.length < 2) return null;
+  if (weeks.every((w) => w % 2 === 1)) return "单";
+  if (weeks.every((w) => w % 2 === 0)) return "双";
+  return null;
+}
+
 /** 由学期开始日期（第一周周一）算当前周次 */
 export function weekOf(startDate: string, date = new Date()): number {
   const start = new Date(startDate + "T00:00:00").getTime();

@@ -110,11 +110,13 @@ function hhmm(n: number): string {
 
 // ---------- 解析 ----------
 
-/** 合并"同课同时段但单双周/教室不同"的活动为一条（周次取并集，教室合并） */
+/** 合并"同课同时段同教室但周次分散"的活动（周次取并集）。
+ *  教室不同的不合并：同一门课单周在 A 教室、双周在 B 教室时保留两条，
+ *  课表按周过滤后每周只显示当周真正的教室。 */
 function mergeActivities(list: ParsedCourse[]): ParsedCourse[] {
   const map = new Map<string, ParsedCourse>();
   for (const c of list) {
-    const key = `${c.courseName}|${c.dayOfWeek}|${c.startSection}|${c.endSection}|${c.teacher ?? ""}`;
+    const key = `${c.courseName}|${c.dayOfWeek}|${c.startSection}|${c.endSection}|${c.teacher ?? ""}|${c.location ?? ""}`;
     const prev = map.get(key);
     if (!prev) {
       map.set(key, { ...c, weeks: [...c.weeks] });
@@ -122,11 +124,6 @@ function mergeActivities(list: ParsedCourse[]): ParsedCourse[] {
     }
     prev.weeks = [...new Set([...prev.weeks, ...c.weeks])].sort((a, b) => a - b);
     prev.weeksText = weeksToText(prev.weeks);
-    if (c.location && c.location !== prev.location) {
-      const rooms = new Set((prev.location ?? "").split(" / ").filter(Boolean));
-      rooms.add(c.location);
-      prev.location = [...rooms].join(" / ");
-    }
   }
   return [...map.values()];
 }

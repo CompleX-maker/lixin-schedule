@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Course, SemesterConfig } from "@contracts/types";
-import { courseColor, courseKey, dayLabel, fmtDate, weekDateRange } from "@/lib/schedule-utils";
+import {
+  courseColor,
+  courseKey,
+  dayLabel,
+  fmtDate,
+  periodEnd,
+  weekDateRange,
+  weeksBadge,
+} from "@/lib/schedule-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/providers/trpc";
 import { ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const SECTIONS = 12;
-
-/** 把 12 节合成 6 大行展示（1-2 / 3-4 / ... / 11-12），块按行跨度放置 */
-function rowOf(section: number) {
-  return Math.ceil(section / 2);
-}
 
 export function WeekGrid({
   courses,
@@ -64,15 +65,17 @@ export function WeekGrid({
   );
   const [monday] = weekDateRange(config.startDate, week);
 
-  const gridCourses = useMemo(() => {
-    // 同一天同一节次重叠时并列显示
-    const bySlot = new Map<string, Course[]>();
+  const periodCount = config.periodTimes.length;
+
+  /** 按（星期, 起始节）分组：同槽多门课并列显示；块按节次跨行 */
+  const slotMap = useMemo(() => {
+    const m = new Map<string, Course[]>();
     for (const c of visible) {
-      const key = `${c.dayOfWeek}-${rowOf(c.startSection)}`;
-      if (!bySlot.has(key)) bySlot.set(key, []);
-      bySlot.get(key)!.push(c);
+      const key = `${c.dayOfWeek}-${c.startSection}`;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(c);
     }
-    return bySlot;
+    return m;
   }, [visible]);
 
   return (
@@ -118,9 +121,9 @@ export function WeekGrid({
             transition={{ duration: 0.26, ease: "easeOut" }}
             className="overflow-x-auto"
           >
-        <div className="min-w-[640px]">
+        <div className="min-w-[680px]">
           {/* 表头：星期 */}
-          <div className="grid grid-cols-[44px_repeat(7,1fr)] border-b">
+          <div className="grid grid-cols-[52px_repeat(7,1fr)] border-b">
             <div className="p-1" />
             {Array.from({ length: 7 }, (_, i) => {
               const d = i + 1;
@@ -146,60 +149,97 @@ export function WeekGrid({
             })}
           </div>
 
-          {/* 6 大节行 */}
-          {Array.from({ length: SECTIONS / 2 }, (_, r) => {
-            const s1 = r * 2 + 1;
-            const s2 = r * 2 + 2;
-            return (
-              <div
-                key={r}
-                className="grid grid-cols-[44px_repeat(7,1fr)] border-b last:border-b-0"
-              >
-                {/* 左侧节次/时间 */}
-                <div className="flex flex-col items-center justify-center border-r py-1 text-muted-foreground">
-                  <span className="text-[11px] font-semibold tnum">
-                    {s1}-{s2}
+          {/* 网格主体：每一小节一行，课程块按节次跨行 */}
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: "52px repeat(7, 1fr)",
+              gridTemplateRows: `repeat(${periodCount}, 54px)`,
+            }}
+          >
+            {/* 左侧节次 + 起止时间 */}
+            {Array.from({ length: periodCount }, (_, i) => {
+              const start = config.periodTimes[i] ?? "";
+              return (
+                <div
+                  key={`t${i}`}
+                  style={{ gridColumn: 1, gridRow: i + 1 }}
+                  className="flex flex-col items-center justify-center border-b border-r text-muted-foreground"
+                >
+                  <span className="text-[11px] font-semibold tnum">{i + 1}</span>
+                  <span className="text-[9px] leading-tight tnum">{start}</span>
+                  <span className="text-[9px] leading-tight tnum opacity-60">
+                    {start ? periodEnd(start) : ""}
                   </span>
-                  <span className="text-[9px] tnum">{config.periodTimes[s1 - 1] ?? ""}</span>
                 </div>
-                {Array.from({ length: 7 }, (_, i) => {
-                  const d = i + 1;
-                  const slot = gridCourses.get(`${d}-${r + 1}`) ?? [];
-                  return (
-                    <div key={d} className="flex min-h-[64px] gap-0.5 border-r p-0.5 last:border-r-0">
-                      {slot.map((c) => {
-                        const col = courseColor(c.courseName);
-                        const hasNote = noteMap.has(courseKey(c));
-                        return (
-                          <button
-                            key={c.id}
-                            onClick={() => setSelected(c)}
-                            className="relative flex-1 rounded-md border-l-[3px] px-1 py-1 text-left transition-transform active:scale-95"
-                            style={{ background: col.bg, borderColor: col.border, color: col.text }}
-                          >
-                            {hasNote && (
-                              <StickyNote
-                                className="absolute right-0.5 top-0.5 h-2.5 w-2.5 opacity-70"
-                                strokeWidth={2.5}
-                              />
-                            )}
-                            <div className="line-clamp-3 text-[10px] font-semibold leading-tight">
-                              {c.courseName}
-                            </div>
-                            {c.location && (
-                              <div className="mt-0.5 line-clamp-1 text-[9px] opacity-75">
-                                {c.location}
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+              );
+            })}
+            {/* 背景空格子（边框） */}
+            {Array.from({ length: periodCount * 7 }, (_, i) => {
+              const row = Math.floor(i / 7) + 1;
+              const col = (i % 7) + 2;
+              return (
+                <div
+                  key={`c${i}`}
+                  style={{ gridColumn: col, gridRow: row }}
+                  className={col === 8 ? "border-b" : "border-b border-r"}
+                />
+              );
+            })}
+            {/* 课程块：跨行放置 */}
+            {[...slotMap.entries()].map(([key, slot]) => {
+              const [d, s] = key.split("-").map(Number);
+              const span = Math.max(...slot.map((c) => c.endSection)) - s + 1;
+              return (
+                <div
+                  key={key}
+                  style={{ gridColumn: d + 1, gridRow: `${s} / span ${span}` }}
+                  className="z-10 flex gap-0.5 p-0.5"
+                >
+                  {slot.map((c) => {
+                    const col = courseColor(c.courseName);
+                    const hasNote = noteMap.has(courseKey(c));
+                    const badge = weeksBadge(c.weeks);
+                    const start = config.periodTimes[c.startSection - 1] ?? "";
+                    const endBase = config.periodTimes[c.endSection - 1] ?? start;
+                    const cspan = c.endSection - c.startSection + 1;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelected(c)}
+                        className="relative min-w-0 flex-1 overflow-hidden rounded-md border-l-[3px] px-1 py-1 text-left transition-transform active:scale-95"
+                        style={{ background: col.bg, borderColor: col.border, color: col.text }}
+                      >
+                        <span className="absolute right-0.5 top-0.5 flex items-center gap-0.5">
+                          {badge && (
+                            <span className="rounded-sm bg-black/10 px-0.5 text-[8px] font-bold leading-3">
+                              {badge}
+                            </span>
+                          )}
+                          {hasNote && (
+                            <StickyNote className="h-2.5 w-2.5 opacity-70" strokeWidth={2.5} />
+                          )}
+                        </span>
+                        <div
+                          className={`text-[10px] font-semibold leading-tight ${
+                            cspan >= 2 ? "line-clamp-3" : "line-clamp-2"
+                          }`}
+                        >
+                          {c.courseName}
+                        </div>
+                        <div className="mt-0.5 text-[9px] tnum opacity-80">
+                          {start}-{periodEnd(endBase)}
+                        </div>
+                        {c.location && cspan >= 2 && (
+                          <div className="line-clamp-1 text-[9px] opacity-75">{c.location}</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
           </motion.div>
         </AnimatePresence>
@@ -218,6 +258,8 @@ export function WeekGrid({
                   <dt className="text-muted-foreground">时间</dt>
                   <dd className="tnum">
                     {dayLabel(selected.dayOfWeek)} 第 {selected.startSection}-{selected.endSection} 节
+                    {config.periodTimes[selected.startSection - 1] &&
+                      ` · ${config.periodTimes[selected.startSection - 1]}-${periodEnd(config.periodTimes[selected.endSection - 1] ?? "")}`}
                   </dd>
                 </div>
                 <div className="flex justify-between">
