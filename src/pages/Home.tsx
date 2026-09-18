@@ -5,6 +5,7 @@ import { TodayView } from "@/components/TodayView";
 import { MinePanel } from "@/components/MinePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Footer } from "@/components/Footer";
 import { CalendarDays, Clock3, Eye, EyeOff, UserRound } from "lucide-react";
 
 type Tab = "today" | "week" | "mine";
@@ -192,6 +193,7 @@ function LoginView({
             )}
           </div>
         )}
+        <Footer />
       </div>
     </div>
   );
@@ -235,6 +237,7 @@ function AuthedApp() {
           <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
         )}
         {tab === "mine" && <MinePanel />}
+        <Footer />
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 backdrop-blur">
