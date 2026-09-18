@@ -110,6 +110,27 @@ function hhmm(n: number): string {
 
 // ---------- 解析 ----------
 
+/** 合并"同课同时段但单双周/教室不同"的活动为一条（周次取并集，教室合并） */
+function mergeActivities(list: ParsedCourse[]): ParsedCourse[] {
+  const map = new Map<string, ParsedCourse>();
+  for (const c of list) {
+    const key = `${c.courseName}|${c.dayOfWeek}|${c.startSection}|${c.endSection}|${c.teacher ?? ""}`;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...c, weeks: [...c.weeks] });
+      continue;
+    }
+    prev.weeks = [...new Set([...prev.weeks, ...c.weeks])].sort((a, b) => a - b);
+    prev.weeksText = weeksToText(prev.weeks);
+    if (c.location && c.location !== prev.location) {
+      const rooms = new Set((prev.location ?? "").split(" / ").filter(Boolean));
+      rooms.add(c.location);
+      prev.location = [...rooms].join(" / ");
+    }
+  }
+  return [...map.values()];
+}
+
 function parseCourseTable(html: string): {
   courses: ParsedCourse[];
   beginOn: string;
@@ -146,7 +167,7 @@ function parseCourseTable(html: string): {
       rawText: m[0].slice(0, 400),
     });
   }
-  return { courses, beginOn, periodTimes };
+  return { courses: mergeActivities(courses), beginOn, periodTimes };
 }
 
 // ---------- 主流程 ----------

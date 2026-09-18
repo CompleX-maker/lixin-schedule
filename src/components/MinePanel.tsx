@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,40 +10,32 @@ import { toast } from "sonner";
 import { LogOut, RefreshCw, Trash2 } from "lucide-react";
 
 export function MinePanel() {
-  const { user, logout } = useAuth();
   const utils = trpc.useUtils();
+  const me = trpc.schedule.me.useQuery(undefined, { retry: false });
   const status = trpc.schedule.status.useQuery();
   const reminder = trpc.schedule.reminder.useQuery();
   const logs = trpc.schedule.logs.useQuery();
   const mailConfig = trpc.schedule.mailConfig.useQuery(undefined, {
-    retry: false,
-    // 非管理员会 403，静默忽略
+    retry: false, // 非管理员 403，静默忽略
   });
 
-  const [studentId, setStudentId] = useState("");
-  const [password, setPassword] = useState("");
-
-  const bind = trpc.schedule.bind.useMutation({
-    onSuccess: (r) => {
-      if (r.ok) toast.success(`绑定成功，已同步 ${r.count} 条课程`);
-      else toast.warning(`账号已保存，但课表抓取未成功：${r.error}`);
-      setPassword("");
-      utils.schedule.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const unbind = trpc.schedule.unbind.useMutation({
-    onSuccess: () => {
-      toast.success("已解绑");
-      utils.schedule.invalidate();
-    },
-  });
   const sync = trpc.schedule.sync.useMutation({
     onSuccess: (r) => {
       toast.success(`已同步 ${r.count} 条课程`);
       utils.schedule.invalidate();
     },
     onError: (e) => toast.error(`同步失败：${e.message}`),
+  });
+  const wipe = trpc.schedule.wipeMe.useMutation({
+    onSuccess: () => {
+      toast.success("已清除课表数据");
+      utils.schedule.invalidate();
+    },
+  });
+  const logout = trpc.schedule.logout.useMutation({
+    onSuccess: async () => {
+      await utils.schedule.invalidate();
+    },
   });
   const updateReminder = trpc.schedule.updateReminder.useMutation({
     onSuccess: () => {
@@ -54,7 +45,6 @@ export function MinePanel() {
     onError: (e) => toast.error(e.message),
   });
 
-  // 提醒设置本地状态
   const [remForm, setRemForm] = useState({
     email: "",
     enableClassReminder: false,
@@ -77,7 +67,7 @@ export function MinePanel() {
   }, [reminder.data]);
 
   const s = status.data;
-  const isAdmin = user?.role === "admin";
+  const isAdmin = me.data?.role === "admin";
 
   return (
     <div className="space-y-6">
@@ -91,87 +81,54 @@ export function MinePanel() {
             </Badge>
           )}
         </div>
-
-        {s?.bound ? (
-          <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-sm">
+          {s?.realName && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">学号</span>
-              <span className="tnum">{s.studentId}</span>
+              <span className="text-muted-foreground">姓名</span>
+              <span>{s.realName}</span>
             </div>
-            {s.realName && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">姓名</span>
-                <span>{s.realName}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">上次同步</span>
-              <span className="tnum">
-                {s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("zh-CN") : "从未"}
-              </span>
-            </div>
-            {s.lastError && (
-              <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{s.lastError}</p>
-            )}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1"
-                disabled={sync.isPending}
-                onClick={() => sync.mutate()}
-              >
-                <RefreshCw className={`mr-1 h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
-                立即同步
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-destructive"
-                onClick={() => {
-                  if (confirm("解绑会删除已同步的课表，确定？")) unbind.mutate();
-                }}
-              >
-                <Trash2 className="mr-1 h-4 w-4" />
-                解绑
-              </Button>
-            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">学号</span>
+            <span className="tnum">{s?.studentId}</span>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              输入教务系统（lxjw.lixin.edu.cn）账号密码，登录验证通过后自动抓取课表。密码加密存储，仅用于课表同步。
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="sid">学号</Label>
-              <Input
-                id="sid"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                placeholder="学号"
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pwd">统一身份认证密码</Label>
-              <Input
-                id="pwd"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="密码"
-                autoComplete="current-password"
-              />
-            </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">本学期课程</span>
+            <span className="tnum">{s?.courseCount} 条</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">上次同步</span>
+            <span className="tnum">
+              {s?.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("zh-CN") : "从未"}
+            </span>
+          </div>
+          {s?.lastError && (
+            <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{s.lastError}</p>
+          )}
+          <div className="flex gap-2">
             <Button
-              className="w-full"
-              disabled={bind.isPending || !studentId || !password}
-              onClick={() => bind.mutate({ studentId, password })}
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              disabled={sync.isPending}
+              onClick={() => sync.mutate()}
             >
-              {bind.isPending ? "正在登录教务系统…" : "绑定并同步课表"}
+              <RefreshCw className={`mr-1 h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
+              立即同步
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              onClick={() => {
+                if (confirm("清除已同步的课表数据？（不影响教务系统本身）")) wipe.mutate();
+              }}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              清除数据
             </Button>
           </div>
-        )}
+        </div>
       </section>
 
       {/* 提醒设置 */}
@@ -263,7 +220,6 @@ export function MinePanel() {
 
       {isAdmin && <AdminPanel mailConfigured={!!mailConfig.data?.user} />}
 
-      {/* 同步日志（调试用） */}
       {logs.data && logs.data.length > 0 && (
         <section className="rounded-xl border bg-card p-4">
           <h3 className="mb-2 font-semibold">最近同步记录</h3>
@@ -281,10 +237,18 @@ export function MinePanel() {
         </section>
       )}
 
-      <Button variant="ghost" className="w-full text-muted-foreground" onClick={logout}>
+      <Button
+        variant="ghost"
+        className="w-full text-muted-foreground"
+        disabled={logout.isPending}
+        onClick={() => logout.mutate()}
+      >
         <LogOut className="mr-1 h-4 w-4" />
-        退出登录（{user?.name ?? "Kimi 用户"}）
+        退出登录（{me.data?.realName ?? me.data?.name ?? ""}）
       </Button>
+      <p className="pb-2 text-center text-xs text-muted-foreground">
+        换设备需重新登录 · 密码加密存储
+      </p>
     </div>
   );
 }
@@ -355,7 +319,7 @@ function AdminPanel({ mailConfigured }: { mailConfigured: boolean }) {
           <Input
             value={cfg.periodTimes}
             onChange={(e) => setCfg({ ...cfg, periodTimes: e.target.value })}
-            placeholder="08:20,09:15,..."
+            placeholder="08:30,09:20,..."
           />
         </div>
         <Button

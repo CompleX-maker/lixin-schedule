@@ -9,7 +9,7 @@ import {
   int,
   boolean,
   json,
-  uniqueIndex,
+
 } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
@@ -60,35 +60,23 @@ export type JwBinding = typeof jwBindings.$inferSelect;
  * 课程条目：一门课在某一星期的某一节次区间。
  * weeks 为 JSON 数组（[1,2,3,...,16]），精确到周，避免解析"1-16周"文本的歧义。
  */
-export const courses = mysqlTable(
-  "courses",
-  {
-    id: serial("id").primaryKey(),
-    userId: bigint("userId", { mode: "number", unsigned: true })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    semester: varchar("semester", { length: 32 }).notNull(), // 如 2026-2027-1
-    courseName: varchar("courseName", { length: 128 }).notNull(),
-    teacher: varchar("teacher", { length: 128 }),
-    location: varchar("location", { length: 128 }),
-    dayOfWeek: int("dayOfWeek").notNull(), // 1=周一 ... 7=周日
-    startSection: int("startSection").notNull(),
-    endSection: int("endSection").notNull(),
-    weeks: json("weeks").$type<number[]>().notNull(),
-    weeksText: varchar("weeksText", { length: 128 }),
-    rawText: text("rawText"), // 抓取到的原始单元格文本，便于排查解析问题
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  (t) => [
-    uniqueIndex("uq_course_slot").on(
-      t.userId,
-      t.semester,
-      t.courseName,
-      t.dayOfWeek,
-      t.startSection,
-    ),
-  ],
-);
+export const courses = mysqlTable("courses", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  semester: varchar("semester", { length: 32 }).notNull(), // 如 2026-2027-1
+  courseName: varchar("courseName", { length: 128 }).notNull(),
+  teacher: varchar("teacher", { length: 128 }),
+  location: varchar("location", { length: 128 }),
+  dayOfWeek: int("dayOfWeek").notNull(), // 1=周一 ... 7=周日
+  startSection: int("startSection").notNull(),
+  endSection: int("endSection").notNull(),
+  weeks: json("weeks").$type<number[]>().notNull(),
+  weeksText: varchar("weeksText", { length: 128 }),
+  rawText: text("rawText"), // 抓取到的原始单元格文本，便于排查解析问题
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 export type Course = typeof courses.$inferSelect;
 

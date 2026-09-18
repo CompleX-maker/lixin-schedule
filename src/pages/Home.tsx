@@ -1,12 +1,11 @@
-import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { WeekGrid } from "@/components/WeekGrid";
 import { TodayView } from "@/components/TodayView";
 import { MinePanel } from "@/components/MinePanel";
 import { Button } from "@/components/ui/button";
-import { LOGIN_PATH } from "@/const";
-import { CalendarDays, Clock3, UserRound } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { CalendarDays, Clock3, Eye, EyeOff, UserRound } from "lucide-react";
 
 type Tab = "today" | "week" | "mine";
 
@@ -16,47 +15,166 @@ const TABS: { key: Tab; label: string; icon: typeof Clock3 }[] = [
   { key: "mine", label: "我的", icon: UserRound },
 ];
 
-export default function Home() {
-  const { user, isLoading } = useAuth();
-  const [tab, setTab] = useState<Tab>("today");
+/** 登录加载期间的轮播文案：事实、梗、状态混在一起 */
+const LOADING_LINES = [
+  "正在验证你的统一身份认证…",
+  "你知道吗，立信是大学，不是大专",
+  "「立信」出自《论语》：民无信不立",
+  "正在和教务系统斗智斗勇…",
+  "1928 年潘序伦创办立信，中国现代会计之父",
+  "正在把你的课表从教务处薅出来…",
+  "教务系统今天心情不错，还挺快",
+  "要是卡住了，多半是教务处在午休",
+  "正在按单双周把课程码放整齐…",
+];
 
-  if (isLoading) {
+export default function Home() {
+  const me = trpc.schedule.me.useQuery(undefined, { retry: false, staleTime: 60_000 });
+
+  if (me.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
-
-  if (!user) return <Landing />;
-
-  return <AuthedApp tab={tab} setTab={setTab} />;
+  if (!me.data) return <LoginView />;
+  return <AuthedApp />;
 }
 
-function Landing() {
+/** 教务账密登录页：进度条 + 轮播梗 */
+function LoginView() {
+  const utils = trpc.useUtils();
+  const [studentId, setStudentId] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "loading" | "error">("idle");
+  const [progress, setProgress] = useState(0);
+  const [lineIdx, setLineIdx] = useState(0);
+  const [errMsg, setErrMsg] = useState("");
+  const timers = useRef<ReturnType<typeof setInterval>[]>([]);
+
+  const login = trpc.schedule.login.useMutation({
+    onSuccess: async () => {
+      setProgress(100);
+      timers.current.forEach(clearInterval);
+      setTimeout(async () => {
+        await utils.schedule.invalidate();
+      }, 500);
+    },
+    onError: (e) => {
+      timers.current.forEach(clearInterval);
+      setPhase("error");
+      setErrMsg(e.message.includes("登录失败") ? e.message : "登录失败，检查学号密码，或稍后再试");
+    },
+  });
+
+  useEffect(() => () => timers.current.forEach(clearInterval), []);
+
+  function startLogin() {
+    if (!studentId || !password || phase === "loading") return;
+    setPhase("loading");
+    setErrMsg("");
+    setProgress(0);
+    setLineIdx(0);
+    // 进度条：先快后慢，最多爬到 92%，等接口回来再补满
+    let p = 0;
+    const pt = setInterval(() => {
+      p += p < 55 ? 7 : p < 80 ? 2.5 : p < 92 ? 0.6 : 0;
+      setProgress(Math.min(92, p));
+    }, 220);
+    const lt = setInterval(() => setLineIdx((i) => (i + 1) % LOADING_LINES.length), 2600);
+    timers.current = [pt, lt];
+    login.mutate({ studentId, password });
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
-      <div className="label-caps text-muted-foreground">LIXIN SCHEDULE</div>
-      <h1 className="mt-3 text-4xl font-black leading-tight">
-        立信课表
-        <span className="text-primary">.</span>
-      </h1>
-      <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
-        绑定教务系统账号，自动同步课表。
-        <br />
-        下一节课倒计时、上课提醒、每晚明日课表推送。
-      </p>
-      <Button size="lg" className="mt-8 w-full max-w-xs" onClick={() => (window.location.href = LOGIN_PATH)}>
-        使用 Kimi 账号登录
-      </Button>
-      <p className="mt-4 text-xs text-muted-foreground">
-        教务密码加密存储 · 仅用于课表同步
-      </p>
+    <div className="flex min-h-screen flex-col items-center justify-center px-6">
+      <div className="w-full max-w-xs">
+        <div className="text-center">
+          <div className="label-caps text-muted-foreground">LIXIN SCHEDULE</div>
+          <h1 className="mt-3 text-4xl font-black leading-tight">
+            立信课表<span className="text-primary">.</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">统一身份认证登录，课表自动同步</p>
+        </div>
+
+        {phase === "loading" ? (
+          <div className="mt-10 space-y-5">
+            {/* 进度条 */}
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="tnum text-xs text-muted-foreground">{Math.round(progress)}%</span>
+            </div>
+            {/* 轮播文案：淡入切换 */}
+            <p
+              key={lineIdx}
+              className="animate-in fade-in slide-in-from-bottom-1 text-center text-sm text-muted-foreground duration-500"
+            >
+              {LOADING_LINES[lineIdx]}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-8 space-y-4">
+            <Input
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value.trim())}
+              placeholder="学号"
+              autoComplete="username"
+              className="h-12 text-base"
+              onKeyDown={(e) => e.key === "Enter" && startLogin()}
+            />
+            <div className="relative">
+              <Input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="统一身份认证密码"
+                autoComplete="current-password"
+                className="h-12 pr-11 text-base"
+                onKeyDown={(e) => e.key === "Enter" && startLogin()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(!showPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                tabIndex={-1}
+              >
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {phase === "error" && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+                {errMsg}
+              </p>
+            )}
+            <Button
+              size="lg"
+              className="h-12 w-full text-base font-semibold"
+              disabled={!studentId || !password}
+              onClick={startLogin}
+            >
+              登录并同步课表
+            </Button>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              密码加密存储，仅用于课表同步
+              <br />
+              课表只存在你自己的账号下，换设备重新登录
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function AuthedApp({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+function AuthedApp() {
+  const [tab, setTab] = useState<Tab>("today");
   const status = trpc.schedule.status.useQuery();
   const coursesQuery = trpc.schedule.myCourses.useQuery(undefined, {
     enabled: !!status.data?.bound,
@@ -70,13 +188,10 @@ function AuthedApp({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       ) + 1
     : 1;
   const w = week ?? currentWeek;
-
   const courses = coursesQuery.data?.courses ?? [];
-  const needBind = status.data && !status.data.bound;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-20">
-      {/* 顶栏 */}
       <header className="sticky top-0 z-10 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-black">
@@ -91,25 +206,13 @@ function AuthedApp({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       </header>
 
       <main className="flex-1 px-4 py-4">
-        {needBind ? (
-          <div className="mt-16 flex flex-col items-center gap-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              还没有绑定教务账号，去「我的」页面绑定后自动同步课表
-            </p>
-            <Button onClick={() => setTab("mine")}>去绑定</Button>
-          </div>
-        ) : (
-          <>
-            {tab === "today" && cfg && <TodayView courses={courses} config={cfg} />}
-            {tab === "week" && cfg && (
-              <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
-            )}
-            {tab === "mine" && <MinePanel />}
-          </>
+        {tab === "today" && cfg && <TodayView courses={courses} config={cfg} />}
+        {tab === "week" && cfg && (
+          <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
         )}
+        {tab === "mine" && <MinePanel />}
       </main>
 
-      {/* 底部 Tab */}
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-lg">
           {TABS.map(({ key, label, icon: Icon }) => (
