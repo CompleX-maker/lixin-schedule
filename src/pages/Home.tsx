@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { trpc } from "@/providers/trpc";
 import { WeekGrid } from "@/components/WeekGrid";
 import { TodayView } from "@/components/TodayView";
@@ -6,6 +7,8 @@ import { MinePanel } from "@/components/MinePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Footer } from "@/components/Footer";
+import { QuipTicker } from "@/components/QuipTicker";
+import { QUIPS } from "@/lib/quips";
 import { CalendarDays, Clock3, Eye, EyeOff, UserRound } from "lucide-react";
 
 type Tab = "today" | "week" | "mine";
@@ -16,16 +19,11 @@ const TABS: { key: Tab; label: string; icon: typeof Clock3 }[] = [
   { key: "mine", label: "我的", icon: UserRound },
 ];
 
-/** 登录加载期间的轮播文案：事实、梗、状态混在一起 */
+/** 登录加载期间的轮播文案：进行中的状态 + 立信段子 */
 const LOADING_LINES = [
   "正在验证你的统一身份认证…",
-  "你知道吗，立信是大学，不是大专",
-  "「立信」出自《论语》：民无信不立",
-  "正在和教务系统斗智斗勇…",
-  "1928 年潘序伦创办立信，中国现代会计之父",
+  ...QUIPS,
   "正在把你的课表从教务处薅出来…",
-  "教务系统今天心情不错，还挺快",
-  "要是卡住了，多半是教务处在午休",
   "正在按单双周把课程码放整齐…",
 ];
 
@@ -107,7 +105,12 @@ function LoginView({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
-      <div className="w-full max-w-xs">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-xs"
+      >
         <div className="text-center">
           <div className="label-caps text-muted-foreground">LIXIN SCHEDULE</div>
           <h1 className="mt-3 text-4xl font-black leading-tight">
@@ -194,7 +197,7 @@ function LoginView({
           </div>
         )}
         <Footer />
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -217,7 +220,7 @@ function AuthedApp() {
   const courses = coursesQuery.data?.courses ?? [];
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-20">
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-28">
       <header className="sticky top-0 z-10 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-black">
@@ -232,31 +235,62 @@ function AuthedApp() {
       </header>
 
       <main className="flex-1 px-4 py-4">
-        {tab === "today" && cfg && <TodayView courses={courses} config={cfg} />}
-        {tab === "week" && cfg && (
-          <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
-        )}
-        {tab === "mine" && <MinePanel />}
-        <Footer />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {tab === "today" && cfg && <TodayView courses={courses} config={cfg} />}
+            {tab === "week" && cfg && (
+              <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
+            )}
+            {tab === "mine" && <MinePanel />}
+            <Footer />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs transition-colors ${
-                tab === key ? "text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              <Icon
-                className={`h-5 w-5 ${tab === key ? "text-primary" : ""}`}
-                strokeWidth={tab === key ? 2.4 : 1.8}
-              />
-              <span className={tab === key ? "font-semibold" : ""}>{label}</span>
-            </button>
-          ))}
+        <div className="mx-auto max-w-lg">
+          <QuipTicker />
+          <div className="flex px-2 pb-1 pt-0.5">
+            {TABS.map(({ key, label, icon: Icon }) => {
+              const active = tab === key;
+              return (
+                <motion.button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  whileTap={{ scale: 0.88 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className={`relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs transition-colors ${
+                    active ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="dock-pill"
+                      transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                      className="absolute inset-x-2 inset-y-0.5 rounded-xl bg-primary/10"
+                    />
+                  )}
+                  <motion.span
+                    animate={{ scale: active ? 1.12 : 1, y: active ? -1 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    className="relative z-10"
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${active ? "text-primary" : ""}`}
+                      strokeWidth={active ? 2.4 : 1.8}
+                    />
+                  </motion.span>
+                  <span className={`relative z-10 ${active ? "font-semibold" : ""}`}>{label}</span>
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>

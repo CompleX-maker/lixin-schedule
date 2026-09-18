@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { Course, SemesterConfig } from "@contracts/types";
 import { courseColor, dayLabel, fmtDate, weekDateRange } from "@/lib/schedule-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,6 +25,12 @@ export function WeekGrid({
   setWeek: (w: number) => void;
 }) {
   const [selected, setSelected] = useState<Course | null>(null);
+  // 周切换方向：决定网格滑入/滑出方向
+  const dirRef = useRef(0);
+  const goWeek = (target: number) => {
+    dirRef.current = target > week ? 1 : -1;
+    setWeek(target);
+  };
   const todayDow = useMemo(() => {
     const d = new Date().getDay();
     return d === 0 ? 7 : d;
@@ -54,23 +61,45 @@ export function WeekGrid({
     <div className="flex flex-col gap-3">
       {/* 周切换 */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => setWeek(Math.max(1, week - 1))}>
+        <Button variant="ghost" size="icon" onClick={() => goWeek(Math.max(1, week - 1))}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <div className="text-center">
-          <div className="text-lg font-bold tnum">第 {week} 周</div>
-          <div className="text-xs text-muted-foreground tnum">
-            {fmtDate(monday)} - {fmtDate(new Date(monday.getTime() + 6 * 86400000))}
-            {week === currentWeek && " · 本周"}
-          </div>
+        <div className="relative h-12 w-44 overflow-hidden text-center">
+          <AnimatePresence mode="popLayout" initial={false} custom={dirRef.current}>
+            <motion.div
+              key={week}
+              custom={dirRef.current}
+              initial={{ opacity: 0, y: 10 * (dirRef.current || 1) }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 * (dirRef.current || 1) }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="absolute inset-0"
+            >
+              <div className="text-lg font-bold tnum">第 {week} 周</div>
+              <div className="text-xs text-muted-foreground tnum">
+                {fmtDate(monday)} - {fmtDate(new Date(monday.getTime() + 6 * 86400000))}
+                {week === currentWeek && " · 本周"}
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setWeek(week + 1)}>
+        <Button variant="ghost" size="icon" onClick={() => goWeek(week + 1)}>
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* 课表网格：横向可滚动 */}
-      <div className="overflow-x-auto rounded-xl border bg-card">
+      {/* 课表网格：横向可滚动；切周时整体滑动过渡 */}
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <AnimatePresence mode="popLayout" initial={false} custom={dirRef.current}>
+          <motion.div
+            key={week}
+            custom={dirRef.current}
+            initial={{ opacity: 0, x: 48 * (dirRef.current || 1) }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -48 * (dirRef.current || 1) }}
+            transition={{ duration: 0.26, ease: "easeOut" }}
+            className="overflow-x-auto"
+          >
         <div className="min-w-[640px]">
           {/* 表头：星期 */}
           <div className="grid grid-cols-[44px_repeat(7,1fr)] border-b">
@@ -147,6 +176,8 @@ export function WeekGrid({
             );
           })}
         </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* 课程详情弹窗 */}
