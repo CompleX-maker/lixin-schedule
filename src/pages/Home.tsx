@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { trpc } from "@/providers/trpc";
 import { WeekGrid } from "@/components/WeekGrid";
+import { AnnouncementPopup } from "@/components/AnnouncementPopup";
 import { TodayView } from "@/components/TodayView";
 import { MinePanel } from "@/components/MinePanel";
 import { Button } from "@/components/ui/button";
@@ -249,6 +250,7 @@ function AuthedApp() {
             )}
             {tab === "mine" && <MinePanel />}
             <Footer />
+            <AnnouncementPopup />
           </motion.div>
         </AnimatePresence>
       </main>

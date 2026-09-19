@@ -63,7 +63,27 @@ export function WeekGrid({
     () => courses.filter((c) => c.weeks.includes(week)),
     [courses, week],
   );
-  const [monday] = weekDateRange(config.startDate, week);
+  const [monday] = weekDateRange(config.startDate, Math.max(week, 1));
+
+  /** 课程总览：按「课程名+教师」分组，列出全部上课安排 */
+  const overview = useMemo(() => {
+    const groups = new Map<string, { name: string; teacher: string | null; items: Course[] }>();
+    for (const c of courses) {
+      const key = `${c.courseName}|${c.teacher ?? ""}`;
+      if (!groups.has(key))
+        groups.set(key, { name: c.courseName, teacher: c.teacher ?? null, items: [] });
+      groups.get(key)!.items.push(c);
+    }
+    const arr = [...groups.values()];
+    for (const g of arr)
+      g.items.sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startSection - b.startSection);
+    arr.sort(
+      (a, b) =>
+        (a.items[0]?.dayOfWeek ?? 9) - (b.items[0]?.dayOfWeek ?? 9) ||
+        (a.items[0]?.startSection ?? 9) - (b.items[0]?.startSection ?? 9),
+    );
+    return arr;
+  }, [courses]);
 
   const periodCount = config.periodTimes.length;
 
@@ -80,9 +100,14 @@ export function WeekGrid({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 周切换 */}
+      {/* 周切换（第 1 周左边是课程总览） */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => goWeek(Math.max(1, week - 1))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={week === 0}
+          onClick={() => goWeek(Math.max(0, week - 1))}
+        >
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <div className="relative h-12 w-44 overflow-hidden text-center">
@@ -96,11 +121,22 @@ export function WeekGrid({
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="absolute inset-0"
             >
-              <div className="text-lg font-bold tnum">第 {week} 周</div>
-              <div className="text-xs text-muted-foreground tnum">
-                {fmtDate(monday)} - {fmtDate(new Date(monday.getTime() + 6 * 86400000))}
-                {week === currentWeek && " · 本周"}
-              </div>
+              {week === 0 ? (
+                <>
+                  <div className="text-lg font-bold">课程总览</div>
+                  <div className="text-xs text-muted-foreground">
+                    全部 {overview.length} 门课 · 右滑返回周视图
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-bold tnum">第 {week} 周</div>
+                  <div className="text-xs text-muted-foreground tnum">
+                    {fmtDate(monday)} - {fmtDate(new Date(monday.getTime() + 6 * 86400000))}
+                    {week === currentWeek && " · 本周"}
+                  </div>
+                </>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -119,8 +155,73 @@ export function WeekGrid({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -48 * (dirRef.current || 1) }}
             transition={{ duration: 0.26, ease: "easeOut" }}
-            className="overflow-x-auto"
+            className={week === 0 ? "" : "overflow-x-auto"}
           >
+        {week === 0 ? (
+          /* 课程总览：按课程分组的全部安排 */
+          <div className="divide-y">
+            {overview.map((g) => {
+              const col = courseColor(g.name);
+              return (
+                <div key={`${g.name}|${g.teacher ?? ""}`} className="px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: col.border }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{g.name}</span>
+                    {g.teacher && (
+                      <span className="shrink-0 text-xs text-muted-foreground">{g.teacher}</span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 space-y-1">
+                    {g.items.map((c) => {
+                      const start = config.periodTimes[c.startSection - 1] ?? "";
+                      const endBase = config.periodTimes[c.endSection - 1] ?? start;
+                      const badge = weeksBadge(c.weeks);
+                      const hasNote = noteMap.has(courseKey(c));
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => setSelected(c)}
+                          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs transition-colors hover:bg-muted/60 active:bg-muted"
+                        >
+                          <span className="shrink-0 tnum text-muted-foreground">
+                            {dayLabel(c.dayOfWeek)} {c.startSection}-{c.endSection}节
+                          </span>
+                          <span className="shrink-0 tnum text-muted-foreground/70">
+                            {start}-{periodEnd(endBase)}
+                          </span>
+                          {c.location && (
+                            <span className="min-w-0 flex-1 truncate">{c.location}</span>
+                          )}
+                          <span className="ml-auto flex shrink-0 items-center gap-1">
+                            {badge && (
+                              <span className="rounded-sm bg-black/10 px-0.5 text-[9px] font-bold leading-3.5">
+                                {badge}
+                              </span>
+                            )}
+                            <span className="tnum text-muted-foreground">
+                              {c.weeksText ?? `${c.weeks[0]}-${c.weeks.at(-1)}周`}
+                            </span>
+                            {hasNote && (
+                              <StickyNote className="h-3 w-3 opacity-70" strokeWidth={2.5} />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {overview.length === 0 && (
+              <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                本学期还没有同步到课程
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="min-w-[680px]">
           {/* 表头：星期 */}
           <div className="grid grid-cols-[52px_repeat(7,1fr)] border-b">
@@ -241,6 +342,7 @@ export function WeekGrid({
             })}
           </div>
         </div>
+        )}
           </motion.div>
         </AnimatePresence>
       </div>

@@ -108,6 +108,25 @@ export const courseNotes = mysqlTable(
 
 export type CourseNote = typeof courseNotes.$inferSelect;
 
+/**
+ * 全站通知（调课提醒等）：管理员发布，用户端弹窗展示。
+ * expiresAt 为空 = 只能手动关闭；到期后视为自动关闭（查询时过滤，无需定时任务）。
+ */
+export const announcements = mysqlTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 120 }).notNull(),
+  content: text("content").notNull(),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt"),
+  status: mysqlEnum("status", ["active", "closed"]).default("active").notNull(),
+  closedAt: timestamp("closedAt"),
+});
+
+export type Announcement = typeof announcements.$inferSelect;
+
 /** 全局配置（学期开始日期、当前学期、节次时间、公告等），管理员可改 */
 export const appSettings = mysqlTable("app_settings", {
   key: varchar("key", { length: 64 }).primaryKey(),

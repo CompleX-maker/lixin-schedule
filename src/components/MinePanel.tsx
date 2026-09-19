@@ -7,7 +7,15 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { LogOut, Megaphone, RefreshCw, Trash2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function MinePanel() {
   const utils = trpc.useUtils();
@@ -257,6 +265,26 @@ function AdminPanel({ mailConfigured }: { mailConfigured: boolean }) {
   const utils = trpc.useUtils();
   const config = trpc.schedule.config.useQuery();
   const mailConfig = trpc.schedule.mailConfig.useQuery();
+  const annList = trpc.announcement.list.useQuery();
+  const publishAnn = trpc.announcement.publish.useMutation({
+    onSuccess: () => {
+      toast.success("通知已发布，全站用户打开即弹窗");
+      setAnnForm({ title: "", content: "", ttl: "72" });
+      utils.announcement.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const closeAnn = trpc.announcement.close.useMutation({
+    onSuccess: () => {
+      toast.success("通知已关闭");
+      utils.announcement.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [annForm, setAnnForm] = useState({ title: "", content: "", ttl: "72" });
+  const activeAnn = annList.data?.find(
+    (a) => a.status === "active" && (!a.expiresAt || new Date(a.expiresAt) > new Date()),
+  );
   const updateConfig = trpc.schedule.updateConfig.useMutation({
     onSuccess: () => {
       toast.success("学期配置已保存");
@@ -294,8 +322,111 @@ function AdminPanel({ mailConfigured }: { mailConfigured: boolean }) {
   return (
     <section className="rounded-xl border border-primary/40 bg-card p-4">
       <h3 className="mb-1 font-semibold">管理员配置</h3>
-      <p className="mb-3 text-xs text-muted-foreground">全站学期与发信设置</p>
+      <p className="mb-3 text-xs text-muted-foreground">全站通知、学期与发信设置</p>
       <div className="space-y-3">
+        {/* 全站通知（调课提醒）：发布后用户打开网页即弹窗，可定时自动关闭 */}
+        <div className="space-y-2">
+          <Label className="flex items-center gap-1.5">
+            <Megaphone className="h-3.5 w-3.5" />
+            全站通知（调课提醒）
+          </Label>
+          {activeAnn ? (
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-2.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">{activeAnn.title}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-xs"
+                  disabled={closeAnn.isPending}
+                  onClick={() => closeAnn.mutate({ id: activeAnn.id })}
+                >
+                  立即关闭
+                </Button>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{activeAnn.content}</p>
+              <div className="mt-1 tnum text-muted-foreground/70">
+                {activeAnn.expiresAt
+                  ? `${new Date(activeAnn.expiresAt).toLocaleString("zh-CN")} 自动关闭`
+                  : "不自动关闭（需手动关闭）"}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">当前没有生效中的通知</p>
+          )}
+          <Input
+            value={annForm.title}
+            onChange={(e) => setAnnForm({ ...annForm, title: e.target.value })}
+            placeholder="标题，如：调课通知"
+            maxLength={120}
+          />
+          <Textarea
+            value={annForm.content}
+            onChange={(e) => setAnnForm({ ...annForm, content: e.target.value })}
+            placeholder="内容，如：第4周周四的概率论调到周五3-4节，教室二教313…"
+            rows={3}
+            maxLength={2000}
+            className="resize-none text-sm"
+          />
+          <div className="flex gap-2">
+            <Select
+              value={annForm.ttl}
+              onValueChange={(v) => setAnnForm({ ...annForm, ttl: v })}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="24">1 天后自动关闭</SelectItem>
+                <SelectItem value="72">3 天后自动关闭</SelectItem>
+                <SelectItem value="168">7 天后自动关闭</SelectItem>
+                <SelectItem value="manual">不自动关闭</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              disabled={publishAnn.isPending || !annForm.title.trim() || !annForm.content.trim()}
+              onClick={() =>
+                publishAnn.mutate({
+                  title: annForm.title.trim(),
+                  content: annForm.content.trim(),
+                  ttlHours: annForm.ttl === "manual" ? null : Number(annForm.ttl),
+                })
+              }
+            >
+              {publishAnn.isPending ? "发布中…" : "发布"}
+            </Button>
+          </div>
+          {annList.data && annList.data.length > 0 && (
+            <ul className="space-y-1 pt-1 text-xs text-muted-foreground">
+              {annList.data.slice(0, 5).map((a) => (
+                <li key={a.id} className="flex items-center gap-1.5">
+                  <span
+                    className={
+                      a.status === "active" && (!a.expiresAt || new Date(a.expiresAt) > new Date())
+                        ? "text-primary"
+                        : "opacity-50"
+                    }
+                  >
+                    ●
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{a.title}</span>
+                  <span className="tnum shrink-0 opacity-70">
+                    {new Date(a.createdAt).toLocaleString("zh-CN", {
+                      month: "numeric",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <Separator />
+
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <Label>学期代码</Label>
