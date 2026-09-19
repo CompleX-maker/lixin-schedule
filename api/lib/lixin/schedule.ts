@@ -9,7 +9,9 @@ import { rawFetch, type StepLog } from "./http";
  *   POST /edu/lesson/std/timetable!courseTable.action
  *     参数：setting.kind=std, ids=<stdId>, semester.id=<semesterId>, weekSpan=1-18
  *   返回 HTML+JS：new CourseTable('开学日期', [[节次起止...]]) + table0.newActivity(...) / addActivityByTime(...)
- *   周次为 53 位 ISO 周年掩码（weekstate bit b = 该年 ISO 第 b+1 周）
+ *   周次为 53 位 ISO 周年掩码，但需先按 newActivity 的 startOn 参数做周偏移
+ *   （对齐官方 TaskActivity.js 的 weeksBetween + convertWeekstate2ReverseString），
+ *   位移后 bit w = 第 w 教学周。
  */
 
 export interface ParsedCourse {
@@ -51,42 +53,42 @@ export function currentSemester(now = new Date()): string {
   return `${y - 1}-${y}-2`;
 }
 
-// ---------- ISO 周工具 ----------
+// ---------- EAMS weekstate 解码（与官方 TaskActivity.js 完全一致的逻辑） ----------
+// 页面端 newActivity(..., startOn, weekstate, ...) 会执行：
+//   weeks = Dates.weeksBetween(beginOn.getDay(), beginOn, toDate(startOn))
+//   weekstate' = convertWeekstate2ReverseString(weekstate, weeks)  // 按 weeks 左/右移
+// 位移后的掩码中 bit w 即"第 w 教学周"（bit 0 为占位）。
+// 关键：startOn 是按星期几锚定的日期（周四/五的课程锚在 ISO 第 1 周，周一至三锚在第 2 周），
+// 忽略它会让周四/五的课程整体偏移一周（第 1 周的课丢失）——2026-09 学期实测确认。
 
-function isoWeekOf(date: Date): { year: number; week: number } {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dayNum + 3); // 本周周四
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const fd = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - fd + 3);
-  return {
-    year: d.getUTCFullYear(),
-    week: 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 86400000)),
-  };
+/** 把日期回退到最近的 weekday（0=周日…6=周六，含当天），对齐 EAMS Dates.weeksBetween */
+function rollBackToWeekday(date: Date, weekday: number): Date {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  while (d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() - 1);
+  return d;
 }
 
-function isoWeekMonday(year: number, week: number): Date {
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const dayNum = (jan4.getUTCDay() + 6) % 7;
-  const monday = new Date(jan4.getTime() - dayNum * 86400000);
-  return new Date(monday.getTime() + (week - 1) * 7 * 86400000);
+/** startOn 相对 beginOn 的周偏移（= EAMS 的 weeksBetween 结果） */
+function weekOffset(beginOn: string, startOn: string): number {
+  const [by, bm, bd] = beginOn.split("-").map(Number);
+  const [sy, sm, sd] = startOn.split("-").map(Number);
+  const begin = new Date(Date.UTC(by, bm - 1, bd));
+  const start = new Date(Date.UTC(sy, sm - 1, sd));
+  const wd = begin.getUTCDay();
+  const a = rollBackToWeekday(begin, wd);
+  const b = rollBackToWeekday(start, wd);
+  return Math.round((b.getTime() - a.getTime()) / (7 * 86400000));
 }
 
-/** weekstate 位掩码 → 教学周数组（以学期第一周周一为锚） */
-function weekstateToWeeks(weekstate: bigint, beginOn: string): number[] {
-  const begin = new Date(beginOn + "T00:00:00");
-  const beginIso = isoWeekOf(begin);
+/** weekstate + startOn → 教学周数组（位移后 bit w = 第 w 教学周） */
+function weekstateToWeeks(weekstate: bigint, beginOn: string, startOn: string): number[] {
+  const offset = startOn ? weekOffset(beginOn, startOn) : 0;
+  const shifted = offset >= 0 ? weekstate << BigInt(offset) : weekstate >> BigInt(-offset);
   const weeks: number[] = [];
-  for (let b = 0; b < 64; b++) {
-    if (!((weekstate >> BigInt(b)) & 1n)) continue;
-    const iso = b + 1;
-    const year = iso >= beginIso.week ? beginIso.year : beginIso.year + 1;
-    const monday = isoWeekMonday(year, iso);
-    const tw = Math.round((monday.getTime() - begin.getTime()) / (7 * 86400000)) + 1;
-    if (tw >= 1 && tw <= 30) weeks.push(tw);
+  for (let b = 1; b < 64; b++) {
+    if ((shifted >> BigInt(b)) & 1n) weeks.push(b);
   }
-  return weeks.sort((a, b) => a - b);
+  return weeks.filter((w) => w <= 30);
 }
 
 /** 周数组 → 紧凑文本，如 [1,3,5..15]→"1-15周(单)"，[1..16]→"1-16周" */
@@ -145,11 +147,11 @@ function parseCourseTable(html: string): {
   let m: RegExpExecArray | null;
   while ((m = actRe.exec(html))) {
     // 捕获组：1=teacherId 2=teacher 3=courseCode 4=courseName 5=roomId 6=room 7=startOn 8=weekstate 9=weekday 10=beginAt 11=endAt
-    const [, , teacher, , courseNameRaw, , room, , weekstate, weekday, beginAt, endAt] = m;
+    const [, , teacher, , courseNameRaw, , room, startOn, weekstate, weekday, beginAt, endAt] = m;
     const startUnit = units.findIndex(([s]) => s === +beginAt);
     const endUnit = units.findIndex(([, e]) => e === +endAt);
     if (startUnit < 0 || endUnit < 0) continue;
-    const weeks = weekstateToWeeks(BigInt(weekstate), beginOn);
+    const weeks = weekstateToWeeks(BigInt(weekstate), beginOn, startOn);
     if (!weeks.length) continue;
     const courseName = courseNameRaw.replace(/\(\d+\)\s*$/, "").trim();
     courses.push({

@@ -221,7 +221,7 @@ function AuthedApp() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-28">
-      <header className="sticky top-0 z-10 border-b bg-background/90 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-black">
             立信课表<span className="text-primary">.</span>
@@ -253,7 +253,7 @@ function AuthedApp() {
         </AnimatePresence>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-10">
+      <div className="fixed inset-x-0 bottom-0 z-30">
         <div className="mx-auto max-w-lg">
           <QuipTicker />
         </div>
