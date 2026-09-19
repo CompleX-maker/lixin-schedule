@@ -20,6 +20,7 @@ import {
   replaceCourses,
   setSetting,
   setUserRole,
+  updateBindingCalendar,
   upsertBinding,
   upsertNote,
   upsertReminder,
@@ -33,6 +34,22 @@ async function loadSemesterConfig(): Promise<SemesterConfig> {
   } catch {
     return { ...DEFAULT_SEMESTER_CONFIG, semester: currentSemester() };
   }
+}
+
+/**
+ * 每人自己的学期配置：优先用该账号同步时从教务系统提取的开学日期/节次时间
+ * （不同年级、校区的日历可能不同，不用全局统一规格），没有才退回全局配置。
+ */
+async function loadUserConfig(userId: number): Promise<SemesterConfig> {
+  const [binding, globalCfg] = await Promise.all([getBinding(userId), loadSemesterConfig()]);
+  if (binding?.beginOn && binding.periodTimes?.length) {
+    return {
+      semester: binding.semester ?? globalCfg.semester,
+      startDate: binding.beginOn,
+      periodTimes: binding.periodTimes,
+    };
+  }
+  return globalCfg;
 }
 
 /**
@@ -67,8 +84,14 @@ async function loginAndSync(studentId: string, password: string) {
   });
   await replaceCourses(user.id, cfg.semester, outcome.courses);
 
-  // 用教务系统提取的开学日期/节次时间自动校准全局配置
+  // 该账号自己的学期日历：按个人实际提取保存，不再只看全局统一配置
   if (outcome.extracted) {
+    await updateBindingCalendar(user.id, {
+      semester: cfg.semester,
+      beginOn: outcome.extracted.beginOn,
+      periodTimes: outcome.extracted.periodTimes,
+    });
+    // 全局配置仅作未同步用户的兜底
     const next = { ...cfg, startDate: outcome.extracted.beginOn, periodTimes: outcome.extracted.periodTimes };
     if (next.startDate !== cfg.startDate || next.periodTimes.join() !== cfg.periodTimes.join()) {
       await setSetting("semesterConfig", JSON.stringify(next));
@@ -90,6 +113,11 @@ async function syncUser(userId: number): Promise<{ count: number }> {
     const outcome = await fetchSchedule(binding.studentId, password, cfg.semester);
     await replaceCourses(userId, cfg.semester, outcome.courses);
     if (outcome.extracted) {
+      await updateBindingCalendar(userId, {
+        semester: cfg.semester,
+        beginOn: outcome.extracted.beginOn,
+        periodTimes: outcome.extracted.periodTimes,
+      });
       const next = { ...cfg, startDate: outcome.extracted.beginOn, periodTimes: outcome.extracted.periodTimes };
       if (next.startDate !== cfg.startDate || next.periodTimes.join() !== cfg.periodTimes.join()) {
         await setSetting("semesterConfig", JSON.stringify(next));
@@ -173,7 +201,7 @@ export const scheduleRouter = createRouter({
 
   /** 课表页首屏状态 */
   status: authedQuery.query(async ({ ctx }) => {
-    const [binding, cfg] = await Promise.all([getBinding(ctx.user.id), loadSemesterConfig()]);
+    const [binding, cfg] = await Promise.all([getBinding(ctx.user.id), loadUserConfig(ctx.user.id)]);
     const count = binding ? (await getCourses(ctx.user.id, cfg.semester)).length : 0;
     return {
       bound: !!binding,
@@ -199,7 +227,7 @@ export const scheduleRouter = createRouter({
   }),
 
   myCourses: authedQuery.query(async ({ ctx }) => {
-    const cfg = await loadSemesterConfig();
+    const cfg = await loadUserConfig(ctx.user.id);
     const list = await getCourses(ctx.user.id, cfg.semester);
     return { semester: cfg.semester, courses: list };
   }),

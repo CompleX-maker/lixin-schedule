@@ -48,6 +48,10 @@ export const jwBindings = mysqlTable("jw_bindings", {
   status: mysqlEnum("status", ["active", "error"]).default("active").notNull(),
   lastError: text("lastError"),
   lastSyncAt: timestamp("lastSyncAt"),
+  // 每人自己的学期日历：不同年级/校区开学日期、节次时间可能不同，按个人实际提取保存
+  semester: varchar("semester", { length: 32 }),
+  beginOn: varchar("beginOn", { length: 10 }),
+  periodTimes: json("periodTimes").$type<string[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()

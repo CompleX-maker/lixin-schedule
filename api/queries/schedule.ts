@@ -41,6 +41,17 @@ export async function markBindingStatus(
     .where(eq(schema.jwBindings.userId, userId));
 }
 
+/** 保存该用户自己提取的学期日历（开学日期 + 节次时间） */
+export async function updateBindingCalendar(
+  userId: number,
+  cal: { semester: string; beginOn: string; periodTimes: string[] },
+) {
+  await getDb()
+    .update(schema.jwBindings)
+    .set({ semester: cal.semester, beginOn: cal.beginOn, periodTimes: cal.periodTimes })
+    .where(eq(schema.jwBindings.userId, userId));
+}
+
 export async function deleteBinding(userId: number) {
   await getDb().delete(schema.jwBindings).where(eq(schema.jwBindings.userId, userId));
   await getDb().delete(schema.courses).where(eq(schema.courses.userId, userId));
