@@ -36,7 +36,7 @@ CAS 认证链路（aTrust 放行后）：
 
 ## 部署
 
-### 自部署（自己的服务器）
+### 自部署
 
 ```bash
 git clone https://github.com/CompleX-maker/lixin-schedule.git
