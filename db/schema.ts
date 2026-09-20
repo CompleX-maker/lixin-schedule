@@ -10,7 +10,7 @@ import {
   boolean,
   json,
   uniqueIndex,
-
+  index,
 } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
@@ -168,3 +168,23 @@ export const fetchLogs = mysqlTable("fetch_logs", {
   sample: text("sample"), // 原始响应截断片段（联调用）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/** 访问日志：记录用户打开网站（仅管理员可见统计；不记录 IP，保护隐私） */
+export const visitLogs = mysqlTable(
+  "visit_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // 冗余快照：用户删号后统计仍可读，也避免每次 join
+    studentId: varchar("studentId", { length: 64 }),
+    realName: varchar("realName", { length: 64 }),
+    college: varchar("college", { length: 128 }),
+    visitedAt: timestamp("visitedAt").defaultNow().notNull(),
+  },
+  (table) => [index("idx_visit_user_time").on(table.userId, table.visitedAt)],
+);
+
+export type VisitLog = typeof visitLogs.$inferSelect;
+

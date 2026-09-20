@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { LogOut, Megaphone, RefreshCw, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { VisitStatsPanel } from "@/components/VisitStatsPanel";
 import {
   Select,
   SelectContent,
@@ -225,6 +226,8 @@ export function MinePanel() {
           </Button>
         </div>
       </section>
+
+      {isAdmin && <VisitStatsPanel />}
 
       {isAdmin && <AdminPanel mailConfigured={!!mailConfig.data?.user} />}
 

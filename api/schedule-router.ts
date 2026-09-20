@@ -8,6 +8,13 @@ import { decryptSecret, encryptSecret } from "./lib/lixin/crypto";
 import { currentSemester, fetchSchedule, LixinAuthError, ScheduleFetchError } from "./lib/lixin/schedule";
 import { findUserByUnionId, upsertUser } from "./queries/users";
 import {
+  recordVisit,
+  recentVisits,
+  visitByPeriod,
+  visitByUser,
+  visitOverview,
+} from "./queries/visits";
+import {
   addFetchLog,
   deleteBinding,
   getBinding,
@@ -188,6 +195,17 @@ export const scheduleRouter = createRouter({
   me: publicQuery.query(async ({ ctx }) => {
     if (!ctx.user) return null;
     const binding = await getBinding(ctx.user.id);
+    // 记录访问（5 分钟内去重，失败不影响主流程）
+    try {
+      await recordVisit({
+        userId: ctx.user.id,
+        studentId: binding?.studentId ?? null,
+        realName: binding?.realName ?? ctx.user.name ?? null,
+        college: binding?.college ?? null,
+      });
+    } catch {
+      /* 统计失败不阻断身份查询 */
+    }
     return {
       name: ctx.user.name,
       role: ctx.user.role,
@@ -282,6 +300,17 @@ export const scheduleRouter = createRouter({
       await upsertNote(ctx.user.id, input.courseKey, input.note);
       return { ok: true };
     }),
+
+  /** 管理员：访问统计（总体 + 时间维度 + 人名名单 + 最近流水） */
+  visitStats: adminQuery.query(async () => {
+    const [overview, periods, users, recent] = await Promise.all([
+      visitOverview(),
+      visitByPeriod(),
+      visitByUser(),
+      recentVisits(60),
+    ]);
+    return { overview, periods, users, recent };
+  }),
 
   /** 管理员：查看/设置 SMTP 发信配置（QQ邮箱授权码） */
   mailConfig: adminQuery.query(async () => {
