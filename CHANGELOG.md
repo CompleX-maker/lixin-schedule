@@ -5,6 +5,36 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.10.0] - 2026-09-20
+
+### ⚠️ 重大变更
+- **学校已为教务系统接入深信服 aTrust 零信任网关**，`lxjw.lixin.edu.cn`、`courses.lixin.edu.cn` 等教务相关域名全部置于网关之后。此前"纯 CAS + 直连抓取"的链路（见 README）已**无法在服务器上直接工作**：带 TGC 访问教务系统会被 302 重定向到 `atrust.lixin.edu.cn` 的 JS 环境校验页，纯 `fetch` 无法通过。
+  - 症状：登录时提示「登录失败，检查学号密码，或稍后再试」；后端日志/db `fetch_logs` 无成功记录
+  - 注意：**账号密码是正确的**，CAS 认证本身可以成功（能拿到 `TGC`），失败发生在「用 TGC 换取教务会话」这一步
+
+### 新增
+- **自部署 aTrust 客户端方案**（服务器侧恢复课表同步的完整路径，已在 Alibaba Cloud Linux 3 实测通过）：
+  1. 从网关自带的下载地址获取 Linux 客户端（无需自行寻找安装包）：
+     - `https://<网关域名>/resource/client/linux/ubuntu/amd64/aTrustInstaller_amd64.deb`（x86_64）
+     - 该 `.deb` 本质是 `ar` 归档，可用 `ar x` 解包后直接取 `data/usr/share/sangfor/aTrust`
+  2. 补依赖（RHEL 系）：`gtk3 libXcomposite libXcursor libXdamage libXi libXrender libXtst atk at-spi2-atk gdk-pixbuf2 pango cairo libXrandr mesa-libgbm libXScrnSaver alsa-lib at-spi2-core libproxy libX11 mesa-libGL`
+  3. 核心服务：`aTrustAgent -i` 注册服务后 `systemctl enable --now aTrustDaemon`
+  4. 图形环境：装 `xfce4-session` + `tigervnc-server`（或 Xvfb），让客户端有可用桌面
+  5. **关键**：`aTrustCore` 插件必须带 `--enable-http` 启动，否则插件内部 `setHttpReferer` 断言失败并 `SIGABRT` 退出，客户端会一直提示「核心服务未启动」：
+     ```bash
+     aTrustAgent --plugin plugins/aTrustCore --plugin-cmd "|" --enable-http --enable-event-center
+     ```
+     成功标志：`/usr/share/sangfor/.aTrust/var/run/aTrustCore-<uuid>` socket 被创建，且与客户端期望的 UUID 一致
+  6. 客户端托盘需 `--no-sandbox --disable-gpu --disable-gpu-sandbox` 才能在无 GPU 的无头环境稳定运行（缺 `--disable-gpu-sandbox` 会因 `GPU process isn't usable` 反复崩溃）
+  7. 服务器需安装浏览器（`firefox`）与 `xdg-utils`，否则登录页「前往浏览器登录」无法拉起
+  8. 登录方式推荐**企业微信扫码**（无需在服务器上处理 CAS 表单），登录成功即代表服务器"上线"，此后服务端 `fetch` 访问教务系统自动走隧道
+
+### 修复
+- `ADMIN_STUDENT_IDS` 未生效：README 文档与部分 `.env` 中误写为单数 `ADMIN_STUDENT_ID`，而代码读取的是复数形式，导致管理员名单不起作用。现已改正文档；若你的 `.env` 用了单数形式，请改为 `ADMIN_STUDENT_IDS=<学号1>,<学号2>`
+
+### 说明
+- aTrust 客户端登录后会话有有效期，掉线需重新登录（VNC 连上去扫一次码即可）。建议配合 systemd 做守护：`aTrustDaemon`、`aTrustCore` 插件、客户端托盘分别为独立服务并设 `Restart=always`
+
 ## [0.9.0] - 2026-09-19
 
 ### 新增

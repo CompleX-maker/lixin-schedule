@@ -39,3 +39,7 @@ build/
 # Test coverage
 coverage/
 .nyc_output/
+
+# pnpm (本项目使用 npm)
+pnpm-lock.yaml
+pnpm-workspace.yaml
