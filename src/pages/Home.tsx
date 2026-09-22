@@ -5,18 +5,21 @@ import { WeekGrid } from "@/components/WeekGrid";
 import { AnnouncementPopup } from "@/components/AnnouncementPopup";
 import { TodayView } from "@/components/TodayView";
 import { MinePanel } from "@/components/MinePanel";
+import { SquarePanel } from "@/components/SquarePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Footer } from "@/components/Footer";
 import { QuipTicker } from "@/components/QuipTicker";
 import { QUIPS } from "@/lib/quips";
-import { CalendarDays, Clock3, Eye, EyeOff, UserRound } from "lucide-react";
+import { PokeBuddy } from "@/components/PokeBuddy";
+import { CalendarDays, Clock3, Eye, EyeOff, MessagesSquare, UserRound } from "lucide-react";
 
-type Tab = "today" | "week" | "mine";
+type Tab = "today" | "week" | "square" | "mine";
 
 const TABS: { key: Tab; label: string; icon: typeof Clock3 }[] = [
   { key: "today", label: "今日", icon: Clock3 },
   { key: "week", label: "课表", icon: CalendarDays },
+  { key: "square", label: "广场", icon: MessagesSquare },
   { key: "mine", label: "我的", icon: UserRound },
 ];
 
@@ -81,7 +84,14 @@ function LoginView({
     onError: (e) => {
       timers.current.forEach(clearInterval);
       setPhase("error");
-      setErrMsg(e.message.includes("登录失败") ? e.message : "登录失败，检查学号密码，或稍后再试");
+      const msg = e.message;
+      // 账号密码类错误：原样提示，便于用户自行修正
+      if (msg.includes("登录失败")) {
+        setErrMsg(msg);
+        return;
+      }
+      // 其余情况（教务系统不可达 / 每日会话重置 / 接口变动等）统一用友好文案
+      setErrMsg("立信的教务系统太坏了！偷偷吃掉了你的登录请求！等管理员睡醒一定去干掉他！");
     },
   });
 
@@ -197,6 +207,9 @@ function LoginView({
             )}
           </div>
         )}
+
+        <PokeBuddy initialLine={phase === "error" ? errMsg : undefined} />
+
         <Footer />
       </motion.div>
     </div>
@@ -248,6 +261,7 @@ function AuthedApp() {
             {tab === "week" && cfg && (
               <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
             )}
+            {tab === "square" && <SquarePanel />}
             {tab === "mine" && <MinePanel />}
             <Footer />
             <AnnouncementPopup />
@@ -297,6 +311,7 @@ function AuthedApp() {
           </div>
         </nav>
       </div>
+
     </div>
   );
 }

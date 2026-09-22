@@ -33,7 +33,15 @@ export function MinePanel() {
       toast.success(`已同步 ${r.count} 条课程`);
       utils.schedule.invalidate();
     },
-    onError: (e) => toast.error(`同步失败：${e.message}`),
+    onError: (e) => {
+      const msg = e.message;
+      // 账号/会话类错误原样显示，其余（教务系统不可达等）用友好文案
+      if (msg.includes("登录失败") || msg.includes("尚未登录") || msg.includes("同步过于频繁")) {
+        toast.error(msg);
+        return;
+      }
+      toast.error("立信的教务系统太坏了！偷偷吃掉了你的同步请求！等管理员睡醒一定去干掉他！");
+    },
   });
   const wipe = trpc.schedule.wipeMe.useMutation({
     onSuccess: () => {

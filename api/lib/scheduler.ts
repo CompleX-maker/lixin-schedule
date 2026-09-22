@@ -16,14 +16,25 @@ import {
 } from "../queries/schedule";
 
 /**
- * 后台调度器（吸取电费监测站经验）：
- *  - 平台容器无人访问会休眠 → 从请求头学习公网 origin，每 4 分钟自 ping 保活
- *  - 多实例可能并存 → DB 租约（appSettings["schedulerLease"]）防重复执行
- *  - 课表同步锚定时间点（每天 06:40 / 22:20），而非固定间隔
- *  - 上课提醒每分钟检查，当天已提醒的课次落库去重
+ * 后台调度器
+ *
+ * ⚠️ 2026-09-21 调整：默认关闭「定时全量同步」
+ *   原因：绑定账号数量增长后，每天 2 次全量同步会在同一分钟内产生上百次
+ *   CAS 登录请求（曾出现 07:00 集中 108 次），具备明显爬虫特征，存在被
+ *   教务系统风控识别、乃至封禁账号的风险。
+ *
+ *   现在策略：
+ *   - 定时任务只做「上课提醒 / 次日课表推送」（纯本地数据库查询，不访问教务）
+ *   - 课表更新改由用户手动触发（「我的 → 立即同步」）
+ *   - 心跳保活保留（只请求本站，不触碰教务系统）
+ *
+ *   如需恢复定时同步，把 ENABLE_AUTO_SYNC 置为 true 即可。
  */
 
 const INSTANCE_ID = nanoid(8);
+
+/** 是否启用「定时全量同步」。默认关闭，避免高频登录触发教务风控 */
+const ENABLE_AUTO_SYNC = process.env.ENABLE_AUTO_SYNC === "true";
 let publicOrigin: string | null = null;
 let started = false;
 
@@ -94,6 +105,8 @@ async function heartbeatTick() {
 let lastSyncAnchor = "";
 async function syncTick() {
   try {
+    // 默认关闭定时同步：避免上百账号集中在同一分钟登录教务系统
+    if (!ENABLE_AUTO_SYNC) return;
     if (!(await acquireLease())) return;
     const now = shanghaiNow();
     const hm = now.getHours() * 100 + now.getMinutes();
@@ -205,7 +218,9 @@ async function remindTick() {
 export function startScheduler() {
   if (started) return;
   started = true;
-  console.log(`[scheduler] started, instance=${INSTANCE_ID}`);
+  console.log(
+    `[scheduler] started, instance=${INSTANCE_ID}, autoSync=${ENABLE_AUTO_SYNC ? "ON" : "OFF(手动同步模式)"}`,
+  );
   setInterval(heartbeatTick, 4 * 60 * 1000);
   setInterval(syncTick, 30 * 60 * 1000);
   setInterval(remindTick, 60 * 1000);

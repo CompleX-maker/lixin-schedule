@@ -43,3 +43,6 @@ coverage/
 # pnpm (本项目使用 npm)
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# 备份文件
+*.bak

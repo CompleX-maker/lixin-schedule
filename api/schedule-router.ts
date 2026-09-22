@@ -8,6 +8,14 @@ import { decryptSecret, encryptSecret } from "./lib/lixin/crypto";
 import { currentSemester, fetchSchedule, LixinAuthError, ScheduleFetchError } from "./lib/lixin/schedule";
 import { findUserByUnionId, upsertUser } from "./queries/users";
 import {
+  createWallMessage,
+  deleteWallMessage,
+  listWallMessages,
+  recentPostCount,
+  toggleWallLike,
+  wallMessageCount,
+} from "./queries/wall";
+import {
   recordVisit,
   recentVisits,
   visitByPeriod,
@@ -233,7 +241,17 @@ export const scheduleRouter = createRouter({
     };
   }),
 
+  /** 手动同步（登录会话复用，不验密）。带冷却，避免频繁请求教务系统 */
   sync: authedQuery.mutation(async ({ ctx }) => {
+    const binding = await getBinding(ctx.user.id);
+    if (binding?.lastSyncAt) {
+      const elapsed = Date.now() - new Date(binding.lastSyncAt).getTime();
+      const COOLDOWN_MS = 5 * 60 * 1000; // 5 分钟
+      if (elapsed < COOLDOWN_MS) {
+        const wait = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
+        throw new Error(`同步过于频繁，请 ${wait} 秒后再试`);
+      }
+    }
     const r = await syncUser(ctx.user.id);
     return { ok: true, count: r.count };
   }),
@@ -298,6 +316,55 @@ export const scheduleRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await upsertNote(ctx.user.id, input.courseKey, input.note);
+      return { ok: true };
+    }),
+
+  /** 留言墙：公开列表 */
+  wallList: publicQuery.query(async ({ ctx }) => {
+    const [list, total] = await Promise.all([
+      listWallMessages(ctx.user?.id, 100),
+      wallMessageCount(),
+    ]);
+    return { list, total };
+  }),
+
+  /** 留言墙：发布（登录用户，60 秒内限 1 条） */
+  wallPost: authedQuery
+    .input(
+      z.object({
+        nickname: z.string().trim().min(1).max(32),
+        content: z.string().trim().min(1).max(500),
+        category: z.enum(["需求", "建议", "吐槽", "其他"]).default("其他"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const recent = await recentPostCount(ctx.user.id, 60);
+      if (recent > 0) throw new Error("发得太快啦，歇一分钟再来～");
+      await createWallMessage({
+        userId: ctx.user.id,
+        nickname: input.nickname,
+        content: input.content,
+        category: input.category,
+      });
+      return { ok: true };
+    }),
+
+  /** 留言墙：点赞/取消 */
+  wallToggleLike: authedQuery
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => toggleWallLike(input.id, ctx.user.id)),
+
+  /** 留言墙：删除（本人或管理员） */
+  wallDelete: authedQuery
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const rows = await listWallMessages(undefined, 500);
+      const target = rows.find((r) => r.id === input.id);
+      if (!target) throw new Error("留言不存在");
+      if (target.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new Error("只能删除自己的留言");
+      }
+      await deleteWallMessage(input.id);
       return { ok: true };
     }),
 

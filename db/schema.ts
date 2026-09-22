@@ -188,3 +188,39 @@ export const visitLogs = mysqlTable(
 
 export type VisitLog = typeof visitLogs.$inferSelect;
 
+/** 留言墙：公开的需求/反馈（可自定义昵称，前台公开可见） */
+export const wallMessages = mysqlTable(
+  "wall_messages",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 32 }).notNull(), // 自定义昵称
+    content: varchar("content", { length: 500 }).notNull(),
+    category: varchar("category", { length: 20 }).notNull().default("other"), // 需求 / 建议 / 吐槽 / 其他
+    likeCount: int("likeCount").notNull().default(0),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [index("idx_wall_created").on(table.createdAt)],
+);
+
+export type WallMessage = typeof wallMessages.$inferSelect;
+
+/** 留言点赞记录：同一用户对同一条只能赞一次 */
+export const wallLikes = mysqlTable(
+  "wall_likes",
+  {
+    id: serial("id").primaryKey(),
+    messageId: bigint("messageId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => wallMessages.id, { onDelete: "cascade" }),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("uniq_wall_like").on(table.messageId, table.userId)],
+);
+
+
