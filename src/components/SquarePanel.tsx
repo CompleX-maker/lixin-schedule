@@ -9,7 +9,14 @@ import { MessagesSquare, HandCoins } from "lucide-react";
  *  - 最上：戳一戳（Q 版形象 + 立信文段）
  *  - 下方分两个板块：留言墙 / 代课悬赏（各自独立划分，互不混排）
  */
-export function SquarePanel() {
+export function SquarePanel({
+  readonly = false,
+  onNeedLogin,
+}: {
+  /** 游客模式：只读，任何写操作都提示登录 */
+  readonly?: boolean;
+  onNeedLogin?: () => void;
+} = {}) {
   const [board, setBoard] = useState<"wall" | "substitute">("wall");
 
   return (
@@ -45,7 +52,11 @@ export function SquarePanel() {
         </button>
       </div>
 
-      {board === "wall" ? <WallPanel /> : <SubstitutePanel />}
+      {board === "wall" ? (
+        <WallPanel readonly={readonly} onNeedLogin={onNeedLogin} />
+      ) : (
+        <SubstitutePanel readonly={readonly} onNeedLogin={onNeedLogin} />
+      )}
     </div>
   );
 }

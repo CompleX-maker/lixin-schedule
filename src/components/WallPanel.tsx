@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronRight,
   ShieldAlert,
+  LogIn,
 } from "lucide-react";
 
 const CATEGORIES = ["需求", "建议", "吐槽", "其他"] as const;
@@ -75,7 +76,13 @@ const fmt = (d: string | Date) =>
   });
 
 /** 留言墙：公开的需求 / 建议 / 吐槽，支持回复 */
-export function WallPanel() {
+export function WallPanel({
+  readonly = false,
+  onNeedLogin,
+}: {
+  readonly?: boolean;
+  onNeedLogin?: () => void;
+} = {}) {
   const utils = trpc.useUtils();
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
   // 轮询：让别人的新留言/回复能自动出现（页面不可见时 react-query 会自动暂停）
@@ -153,6 +160,10 @@ export function WallPanel() {
     onError: (e) => toast.error(e.message),
   });
 
+  // 游客模式下不显示任何写操作入口
+  const canWrite = !readonly;
+  const requireLogin = () => onNeedLogin?.();
+
   const all = list.data?.list ?? [];
   const shown = scope === "mine" ? all.filter((m) => m.isMine) : all;
   const { isAdmin: realIsAdmin } = useIsAdmin();
@@ -190,19 +201,26 @@ export function WallPanel() {
             想要什么功能？哪里不好用？说一声 · 共 {list.data?.total ?? 0} 条
           </p>
         </div>
-        <Button
-          size="sm"
-          variant={expanded ? "outline" : "default"}
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            setExpanded(!expanded);
-            // 展开时重置"已修改"标记，让默认昵称生效（用户可自行清空）
-            setNicknameTouched(false);
-          }}
-        >
-          <MessageSquarePlus className="mr-1 h-3 w-3" />
-          {expanded ? "收起" : "写留言"}
-        </Button>
+        {canWrite ? (
+          <Button
+            size="sm"
+            variant={expanded ? "outline" : "default"}
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              setExpanded(!expanded);
+              // 展开时重置"已修改"标记，让默认昵称生效（用户可自行清空）
+              setNicknameTouched(false);
+            }}
+          >
+            <MessageSquarePlus className="mr-1 h-3 w-3" />
+            {expanded ? "收起" : "写留言"}
+          </Button>
+        ) : (
+          <Button size="sm" className="h-7 px-2 text-xs" onClick={requireLogin}>
+            <LogIn className="mr-1 h-3 w-3" />
+            登录发言
+          </Button>
+        )}
       </div>
 
       {/* 发布区 */}
@@ -325,8 +343,9 @@ export function WallPanel() {
                     className={`flex items-center gap-1 text-[11px] transition-colors ${
                       m.liked ? "text-primary" : "text-muted-foreground hover:text-foreground"
                     }`}
-                    disabled={!me.data || toggleLike.isPending}
-                    onClick={() => toggleLike.mutate({ id: m.id })}
+                    onClick={() =>
+                      canWrite && me.data ? toggleLike.mutate({ id: m.id }) : requireLogin()
+                    }
                   >
                     <ThumbsUp className={`h-3 w-3 ${m.liked ? "fill-current" : ""}`} />
                     <span className="tnum">{m.likeCount}</span>
@@ -334,9 +353,12 @@ export function WallPanel() {
 
                   <button
                     className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                    disabled={!me.data}
                     onClick={() =>
-                      replyTarget === m.id ? setReplyTarget(null) : openReply(m.id)
+                      canWrite && me.data
+                        ? replyTarget === m.id
+                          ? setReplyTarget(null)
+                          : openReply(m.id)
+                        : requireLogin()
                     }
                   >
                     <Reply className="h-3 w-3" />
@@ -495,9 +517,13 @@ export function WallPanel() {
         </ul>
       )}
 
-      {!me.data && (
+      {readonly && (
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          登录后才能留言、回复和点赞
+          预览模式下只能查看，
+          <button onClick={requireLogin} className="mx-0.5 font-medium text-primary underline">
+            登录
+          </button>
+          后可以发言
         </p>
       )}
       {isAdmin && (

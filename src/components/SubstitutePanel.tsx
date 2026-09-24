@@ -125,7 +125,13 @@ const relTime = (d: string | Date) => {
   return new Date(d).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 };
 
-export function SubstitutePanel() {
+export function SubstitutePanel({
+  readonly = false,
+  onNeedLogin,
+}: {
+  readonly?: boolean;
+  onNeedLogin?: () => void;
+} = {}) {
   const utils = trpc.useUtils();
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
 
@@ -227,6 +233,9 @@ export function SubstitutePanel() {
     onError: (e) => toast.error(e.message),
   });
 
+  const canWrite = !readonly;
+  const requireLogin = () => onNeedLogin?.();
+
   const all = list.data?.list ?? [];
   const { isAdmin: realIsAdmin } = useIsAdmin();
   const isAdmin = !!list.data?.isAdmin && realIsAdmin;
@@ -243,18 +252,25 @@ export function SubstitutePanel() {
             课程时间与价格自定义 · 招募中 {list.data?.openCount ?? 0} 单
           </p>
         </div>
-        <Button
-          size="sm"
-          variant={expanded ? "outline" : "default"}
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            setExpanded(!expanded);
-            setNickTouched(false);
-          }}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          {expanded ? "收起" : "发布悬赏"}
-        </Button>
+        {canWrite ? (
+          <Button
+            size="sm"
+            variant={expanded ? "outline" : "default"}
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              setExpanded(!expanded);
+              setNickTouched(false);
+            }}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            {expanded ? "收起" : "发布悬赏"}
+          </Button>
+        ) : (
+          <Button size="sm" className="h-7 px-2 text-xs" onClick={requireLogin}>
+            <Plus className="mr-1 h-3 w-3" />
+            登录发布
+          </Button>
+        )}
       </div>
 
       {/* 发布表单 */}
@@ -563,7 +579,7 @@ export function SubstitutePanel() {
                         已报名（点击取消）
                       </button>
                     ) : p.status === "open" ? (
-                      me.data ? (
+                      me.data && canWrite ? (
                         <button
                           className="flex items-center gap-1 rounded border border-primary/40 px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
                           onClick={() => {
@@ -648,7 +664,9 @@ export function SubstitutePanel() {
                     onAccept={(id) => accept.mutate({ postId: p.id, applicationId: id })}
                     accepting={accept.isPending}
                     myApplyStatus={p.myApplyStatus}
-                    canApply={!p.isMine && !!me.data && p.status === "open" && !p.myApplyStatus}
+                    canApply={
+                      !readonly && !p.isMine && !!me.data && p.status === "open" && !p.myApplyStatus
+                    }
                     onApply={() => {
                       setApplyTarget(p.id);
                       setApplyNickTouched(false);
@@ -661,9 +679,13 @@ export function SubstitutePanel() {
         </ul>
       )}
 
-      {!me.data && (
+      {readonly && (
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          登录后才能发布悬赏和接单
+          预览模式下只能查看，
+          <button onClick={requireLogin} className="mx-0.5 font-medium text-primary underline">
+            登录
+          </button>
+          后可以发布和接单
         </p>
       )}
       <p className="mt-2 text-center text-[10px] text-muted-foreground">

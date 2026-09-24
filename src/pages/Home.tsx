@@ -13,6 +13,8 @@ import { QuipTicker } from "@/components/QuipTicker";
 import { QUIPS } from "@/lib/quips";
 import { PokeBuddy } from "@/components/PokeBuddy";
 import { InstallFab } from "@/components/InstallFab";
+import { GuestBanner } from "@/components/GuestBanner";
+import { DEMO_COURSES, demoConfig } from "@/lib/demo-data";
 import { WeChatGuide } from "@/components/WeChatGuide";
 import { CalendarDays, Clock3, Eye, EyeOff, MessagesSquare, UserRound } from "lucide-react";
 
@@ -36,6 +38,8 @@ const LOADING_LINES = [
 export default function Home() {
   const me = trpc.schedule.me.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const [adminOverride, setAdminOverride] = useState(false);
+  // 游客点了「登录」后，本次会话内直接展示登录页
+  const [forceLogin, setForceLogin] = useState(false);
 
   if (me.isLoading) {
     return (
@@ -44,9 +48,20 @@ export default function Home() {
       </div>
     );
   }
-  // 只有教务身份（有学号）才能直接进 App；Kimi 管理员身份落在登录页，需显式进入
+  // Kimi 管理员身份需显式进入（它没有学号，不能直接当学生用）
   const isStudent = !!me.data?.studentId;
-  if (!me.data || (!isStudent && !adminOverride)) {
+  const needKimiGate = !!me.data && !isStudent && !adminOverride;
+
+  // 未登录：给游客模式，先看演示课表；想登录时再切到登录页
+  if (!me.data) {
+    return forceLogin ? (
+      <LoginView kimiUser={null} onEnterAdmin={() => setAdminOverride(true)} />
+    ) : (
+      <GuestApp onLogin={() => setForceLogin(true)} />
+    );
+  }
+
+  if (needKimiGate) {
     return (
       <LoginView
         kimiUser={me.data && !isStudent ? me.data : null}
@@ -214,6 +229,126 @@ function LoginView({
 
         <Footer />
       </motion.div>
+    </div>
+  );
+}
+
+
+/**
+ * 游客模式：未登录也能看课表长什么样
+ *
+ * 用一份虚构的演示课表渲染真实的 TodayView / WeekGrid，
+ * 让访客直观了解产品形态，再决定要不要登录。
+ * 「我的」标签页在游客模式下不出现，避免暴露账号相关 UI。
+ */
+function GuestApp({ onLogin }: { onLogin: () => void }) {
+  const [tab, setTab] = useState<Tab>("today");
+  const [week, setWeek] = useState<number | null>(null);
+  const config = trpc.schedule.config.useQuery();
+
+  const cfg = demoConfig(config.data);
+  const currentWeek = Math.floor(
+    (Date.now() - new Date(cfg.startDate + "T00:00:00").getTime()) / (7 * 24 * 3600 * 1000),
+  ) + 1;
+  const w = week ?? currentWeek;
+
+  // 游客只能看「今日 / 课表 / 广场」，没有「我的」
+  const guestTabs = TABS.filter((t) => t.key !== "mine");
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-28">
+      <header className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur">
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-xl font-black">
+            立信课表<span className="text-primary">.</span>
+          </h1>
+          <span className="tnum text-xs text-muted-foreground">
+            {cfg.semester} · 第 {currentWeek} 周
+          </span>
+        </div>
+      </header>
+
+      <GuestBanner onLogin={onLogin} />
+
+      <main className="flex-1 px-4 py-4">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {tab === "today" && <TodayView courses={DEMO_COURSES} config={cfg} />}
+            {tab === "week" && (
+              <WeekGrid courses={DEMO_COURSES} config={cfg} week={w} setWeek={setWeek} />
+            )}
+            {tab === "square" && <SquarePanel readonly onNeedLogin={onLogin} />}
+
+            {/* 游客模式下的引导卡片 */}
+            <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <h3 className="text-sm font-semibold">登录后可以做什么</h3>
+              <ul className="mt-2 space-y-1 text-[11px] leading-relaxed text-muted-foreground">
+                <li>· 自动同步你自己的课表，不用手动录</li>
+                <li>· 上课前提醒、次日课表推送</li>
+                <li>· 调课通知与课程备注</li>
+                <li>· 在广场发言、发布和接取代课悬赏</li>
+              </ul>
+              <Button size="sm" className="mt-3 h-8 w-full text-xs" onClick={onLogin}>
+                立即登录
+              </Button>
+            </section>
+
+            <Footer />
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      <WeChatGuide />
+      <InstallFab />
+
+      <div className="fixed inset-x-0 bottom-0 z-30">
+        <div className="mx-auto max-w-lg">
+          <QuipTicker />
+        </div>
+        <nav className="border-t bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-lg px-2 pb-1 pt-0.5">
+            {guestTabs.map(({ key, label, icon: Icon }) => {
+              const active = tab === key;
+              return (
+                <motion.button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  whileTap={{ scale: 0.88 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className={`relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs transition-colors ${
+                    active ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="guest-dock-pill"
+                      transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                      className="absolute inset-x-2 inset-y-0.5 rounded-xl bg-primary/10"
+                    />
+                  )}
+                  <motion.span
+                    animate={{ scale: active ? 1.12 : 1, y: active ? -1 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    className="relative z-10"
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${active ? "text-primary" : ""}`}
+                      strokeWidth={active ? 2.4 : 1.8}
+                    />
+                  </motion.span>
+                  <span className={`relative z-10 ${active ? "font-semibold" : ""}`}>{label}</span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   );
 }
