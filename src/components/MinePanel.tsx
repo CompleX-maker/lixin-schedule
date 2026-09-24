@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ServerChanField } from "@/components/ServerChanField";
+import { AdminPreviewToggle, useIsAdmin } from "@/components/AdminPreviewToggle";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +86,7 @@ export function MinePanel() {
   }, [reminder.data]);
 
   const s = status.data;
-  const isAdmin = me.data?.role === "admin";
+  const { isAdmin } = useIsAdmin();
 
   return (
     <div className="space-y-6">
@@ -231,6 +232,8 @@ export function MinePanel() {
           </Button>
         </div>
       </section>
+
+      <AdminPreviewToggle />
 
       {isAdmin && <VisitStatsPanel />}
 

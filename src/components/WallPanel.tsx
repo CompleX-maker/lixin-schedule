@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useIsAdmin } from "@/components/AdminPreviewToggle";
 import {
   MessageSquarePlus,
   ThumbsUp,
@@ -77,7 +78,13 @@ const fmt = (d: string | Date) =>
 export function WallPanel() {
   const utils = trpc.useUtils();
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
-  const list = trpc.schedule.wallList.useQuery();
+  // 轮询：让别人的新留言/回复能自动出现（页面不可见时 react-query 会自动暂停）
+  const list = trpc.schedule.wallList.useQuery(undefined, {
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    staleTime: 5000,
+  });
 
   const [scope, setScope] = useState<"all" | "mine">("all");
   const [expanded, setExpanded] = useState(false);
@@ -148,7 +155,8 @@ export function WallPanel() {
 
   const all = list.data?.list ?? [];
   const shown = scope === "mine" ? all.filter((m) => m.isMine) : all;
-  const isAdmin = !!list.data?.isAdmin;
+  const { isAdmin: realIsAdmin } = useIsAdmin();
+  const isAdmin = !!list.data?.isAdmin && realIsAdmin;
 
   const openReply = (messageId: number, to?: { id: number; nickname: string }) => {
     setReplyTarget(messageId);
@@ -350,7 +358,7 @@ export function WallPanel() {
                     </button>
                   )}
 
-                  {(m.isMine || me.data?.role === "admin") && (
+                  {(m.isMine || isAdmin) && (
                     <button
                       className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-destructive"
                       disabled={del.isPending}

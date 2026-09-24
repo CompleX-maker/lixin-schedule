@@ -7,7 +7,18 @@ import type { ReactNode } from "react";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // 默认不重试（课表类接口失败通常是有原因的，如未绑定）
+      retry: 1,
+      // 窗口重新获得焦点时刷新：手机切回 App 就能看到最新内容
+      refetchOnWindowFocus: true,
+      // 数据 5 秒内视为新鲜，避免多个组件同时挂载时重复请求
+      staleTime: 5000,
+    },
+  },
+});
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({

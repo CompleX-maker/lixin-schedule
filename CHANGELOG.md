@@ -5,6 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.14.2] - 2026-09-24
+
+### 新增
+- **管理员权限开关**（「我的」页面顶部，仅管理员可见）
+  - 关掉后整个界面按普通用户呈现，用于确认权限相关 UI 是否正确隐藏
+  - 会隐藏：访问统计面板、管理面板、留言/回复/悬赏的真实姓名学号徽标、非本人内容的删除按钮、各类管理员提示
+  - 纯客户端显示层开关，服务端仍按真实 role 下发数据 —— 无越权风险，误操作也不会真的丢权限
+  - 关闭时显示琥珀色提示「你仍是管理员，只是界面按普通用户显示」，避免误以为权限丢失
+  - 状态存 localStorage，刷新后保持；监听 storage 事件，多标签页同步
+  - 新增 `useIsAdmin()` hook，统一提供 `isAdmin`（受预览影响）与 `realIsAdmin`（真实权限）
+
+### 修复
+- **广场内容不实时更新**：`wallList` / `subList` / `subDetail` 均未配置 `refetchInterval`，只在组件挂载或自己操作后刷新，因此别人发的新留言、新悬赏、接单状态都不会自动出现
+  - 改为 15 秒轮询 + 窗口重新获得焦点时刷新；页面不可见时自动暂停（`refetchIntervalInBackground: false`），不浪费流量
+- **管理员开关滑块错位**：轨道 `h-6 w-11`（44×24）配 `w-5`（20）滑块时，原写法混用 `top-0.5` 与 translate，导致滑块未垂直居中且行程不对
+  - 改为 `inline-flex items-center` 让滑块自动垂直居中，水平方向用 `translate-x-0.5` / `translate-x-[22px]`（44 − 2 − 20 = 22）
+
+### 变更
+- `QueryClient` 增加默认配置：`retry: 1`、`refetchOnWindowFocus: true`、`staleTime: 5000`
+  - 手机从后台切回时自动刷新，且避免多组件同时挂载造成重复请求
+
 ## [0.14.1] - 2026-09-24
 
 ### 修复

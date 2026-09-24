@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useIsAdmin } from "@/components/AdminPreviewToggle";
 import {
   HandCoins,
   Plus,
@@ -129,7 +130,16 @@ export function SubstitutePanel() {
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
 
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "taken" | "done">("all");
-  const list = trpc.schedule.subList.useQuery({ status: statusFilter });
+  // 轮询：让别人的新悬赏 / 接单状态自动更新
+  const list = trpc.schedule.subList.useQuery(
+    { status: statusFilter },
+    {
+      refetchInterval: 15000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      staleTime: 5000,
+    },
+  );
 
   const [expanded, setExpanded] = useState(false);
   const [openDetail, setOpenDetail] = useState<number | null>(null);
@@ -218,7 +228,8 @@ export function SubstitutePanel() {
   });
 
   const all = list.data?.list ?? [];
-  const isAdmin = !!list.data?.isAdmin;
+  const { isAdmin: realIsAdmin } = useIsAdmin();
+  const isAdmin = !!list.data?.isAdmin && realIsAdmin;
 
   return (
     <section className="rounded-xl border bg-card p-4">
@@ -689,7 +700,10 @@ function SubDetail({
   myApplyStatus: string | null;
   canApply: boolean;
 }) {
-  const detail = trpc.schedule.subDetail.useQuery({ id: postId });
+  const detail = trpc.schedule.subDetail.useQuery(
+    { id: postId },
+    { refetchInterval: 15000, refetchIntervalInBackground: false },
+  );
 
   if (detail.isLoading)
     return <p className="mt-2 text-[11px] text-muted-foreground">加载报名中…</p>;
