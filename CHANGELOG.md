@@ -18,20 +18,32 @@
     - 静态资源（`/assets/`、`/static/`）缓存优先，打开更快
     - 页面导航网络优先、离线回退缓存，断网时可打开上次页面
     - API 请求完全不缓存，保证课表数据实时
-  - 新增 `InstallBanner` 组件（「我的」页面顶部）：
-    - Chrome / Edge / Android：捕获 `beforeinstallprompt`，一键唤起系统安装弹窗
-    - iOS Safari：显示「分享 → 添加到主屏幕」分步图文引导
+  - **安装引导（悬浮按钮 `InstallFab`）**：首页右下角常驻，覆盖所有环境
+    - Chromium 系（Chrome / Edge）：捕获 `beforeinstallprompt`，点击直接唤起系统安装弹窗
+    - 安卓非 Chromium 浏览器（Via / Firefox / UC）：展开「右上角 ⋮ → 添加到主屏幕」手动步骤
+    - iOS Safari：展开「分享 → 添加到主屏幕」分步图文
+    - 桌面浏览器：提示地址栏安装图标位置
     - 已安装或用户忽略后 14 天内不再显示
-  - 图标由站内 Q 版形象（八千代）生成，配站点主色底
+  - **微信内置浏览器引导（`WeChatGuide`）**：访问占比约一半，而微信 WebView 完全不支持安装
+    - 进入页面 2.5 秒后从顶部滑下轻提示条，引导「右上角 ⋯ → 在浏览器打开」
+    - 刻意不用全屏遮罩，避免打断阅读；可关闭，12 小时内不重复
+  - 图标由站内 Q 版形象（八千代）生成，配站点主色底（直接用透明底会导致图标几乎不可见）
   - 新增 manifest `shortcuts`：长按图标可直达「今日 / 本周 / 广场」
   - iOS 支持：`apple-mobile-web-app-capable`、`apple-touch-icon`、状态栏样式
 
 ### 变更
 - `index.html` 补充完整 meta（description、theme-color、viewport-fit=cover 适配刘海屏）
 - Nginx 增加 PWA 相关规则：`/sw.js` 走 `no-cache` 并带 `Service-Worker-Allowed`；manifest 指定 `application/manifest+json`；图标目录 30 天缓存
+- 移除冗余的 `InstallBanner`（「我的」页内联条），由全局悬浮按钮 `InstallFab` 取代，避免同页重复提示
+
+### 修复
+- **安卓非 Chromium 浏览器看不到安装入口**：原逻辑为「有 `beforeinstallprompt` → 显示按钮 / 是 iOS → 显示步骤 / 否则不显示」，而 Via、Firefox、UC 等不派发该事件，导致按钮完全不渲染
+  - 改为「只要未安装就一定有引导」：按平台分别给出原生安装或手动添加步骤
 
 ### 说明
-- PWA 与「微信小程序」「原生 App」的区别：PWA 免备案免签名，适合课程表这类工具；缺点是 iOS 上需通过 Safari 手动「添加到主屏幕」，且微信内置浏览器不支持安装引导（已在该场景提示用户用 Safari 打开）
+- PWA 与「微信小程序」「原生 App」的区别：PWA 免备案免签名，适合课程表这类工具
+- 已知限制：iOS 上必须用 Safari 才能添加；微信内置浏览器无法安装（已做引导）
+- **微信推送的可行性**：个人主体的订阅号无法完成微信认证，因而拿不到模板消息权限；唯一可能的路径是「一次性订阅消息」（用户每授权一次可发一条，无需关注），但同样要求账号**已认证**，需在公众平台「接口权限」中确认后另作评估
 
 ## [0.13.0] - 2026-09-23
 
