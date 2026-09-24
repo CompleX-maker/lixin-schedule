@@ -230,7 +230,7 @@ function LoginView({
               className="mx-auto flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
             >
               <Eye className="h-3 w-3" />
-              不确定要不要登录？先看看效果
+              不想登录？点这里预览
             </button>
 
             {kimiUser && (
