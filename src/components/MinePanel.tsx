@@ -3,6 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ServerChanField } from "@/components/ServerChanField";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -206,15 +207,11 @@ export function MinePanel() {
               />
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="sct">Server酱 SendKey（可选）</Label>
-            <Input
-              id="sct"
-              value={remForm.serverChanKey}
-              onChange={(e) => setRemForm({ ...remForm, serverChanKey: e.target.value })}
-              placeholder="SCT..."
-            />
-          </div>
+          <ServerChanField
+            value={remForm.serverChanKey}
+            onChange={(v) => setRemForm({ ...remForm, serverChanKey: v })}
+            savedKey={reminder.data?.serverChanKey ?? ""}
+          />
           <Button
             variant="outline"
             className="w-full"

@@ -1,6 +1,7 @@
 import * as cookie from "cookie";
 import { z } from "zod";
 import { createRouter, authedQuery, publicQuery, adminQuery } from "./middleware";
+import { sendKeyKind, sendServerChan, sendMail } from "./lib/notify";
 import { DEFAULT_SEMESTER_CONFIG, type SemesterConfig } from "@contracts/types";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { JW_SESSION_COOKIE, JW_SESSION_MAX_AGE_S, signJwSession } from "./lib/jw-session";
@@ -686,6 +687,54 @@ export const scheduleRouter = createRouter({
         throw new Error("只能删除自己发布的悬赏");
       }
       await deleteSubstitutePost(input.postId);
+      return { ok: true };
+    }),
+
+  /** 提醒：测试 Server酱 推送（便于用户确认配置是否正确） */
+  testServerChan: authedQuery
+    .input(z.object({ key: z.string().trim().max(128).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // 没传就用已保存的
+      let key = input.key?.trim();
+      if (!key) {
+        const rem = await getReminder(ctx.user.id);
+        key = rem?.serverChanKey ?? "";
+      }
+      if (!key) throw new Error("还没有填写 SendKey");
+
+      const kind = sendKeyKind(key);
+      if (kind === "unknown") {
+        throw new Error(
+          "SendKey 格式看起来不对。请到 sct.ftqq.com 登录后复制，形如 SCT 开头的一长串",
+        );
+      }
+
+      const r = await sendServerChan(
+        key,
+        "立信课表 · 测试推送",
+        "如果你收到这条消息，说明推送配置成功 ✅\n\n之后的上课提醒会发到这里。",
+      );
+      if (!r.ok) throw new Error(r.message);
+      return { ok: true, kind };
+    }),
+
+  /** 提醒：测试邮件 */
+  testMail: authedQuery
+    .input(z.object({ email: z.string().email().max(320).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      let email = input.email?.trim();
+      if (!email) {
+        const rem = await getReminder(ctx.user.id);
+        email = rem?.email ?? "";
+      }
+      if (!email) throw new Error("还没有填写邮箱");
+
+      const ok = await sendMail(
+        email,
+        "立信课表 · 测试邮件",
+        "如果你收到这封邮件，说明邮箱提醒配置成功 ✅\n之后的上课提醒会发到这里。",
+      );
+      if (!ok) throw new Error("发送失败，请检查邮箱地址（管理员需先在后台配置 SMTP）");
       return { ok: true };
     }),
 

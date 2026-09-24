@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.14.1] - 2026-09-24
+
+### 修复
+- **Server酱推送的 URL 构造有误**：原代码里三元表达式的两个分支完全相同（`key.startsWith("sctp") ? 老地址 : 老地址`），等于没做兼容
+  - 后果：用户若填 Server酱³ 的 SendKey，会被官方「临时转发」接管，而该转发**会往消息里插入广告**，且官方声明最长三年后停用
+  - 现在按 SendKey 格式区分两代产品，各自走官方入口：
+    - `SCT...`（Turbo）→ `sctapi.ftqq.com/<key>.send`
+    - `sctp{uid}t...`（³）→ `https://{uid}.push.ft07.com/send/<key>.send`
+- **HTTP 200 不等于成功**：Server酱 失败时也返回 200，成功与否在 body 的 `code` 字段。原实现只看 `res.ok`，会把失败误判为成功
+  - 改为解析 JSON 并检查 `code`，同时把官方错误翻译成人话（Key 无效 / 次数用尽 / 未关注）
+
+### 新增
+- **「测试推送」按钮**：配置后点一下就能立刻知道成没成功，无需等到上课提醒触发
+- **SendKey 实时格式校验**：填错当场红字提示，并说明应为 `SCT` 开头的长串
+- **Server酱配置图文引导**（可折叠）：
+  - 三步说明，第一步直接给 sct.ftqq.com 跳转链接
+  - 特别提示不要误填 Server酱³ 的 Key（`sctp` 开头，只能推到它自己的 APP）
+- 新增接口 `testServerChan` / `testMail`
+
+### 变更
+- 「我的」页面的 SendKey 输入框替换为独立的 `ServerChanField` 组件，标题改为「微信推送（Server酱）」并加图标
+
+### 数据
+- 清理 `reminder_settings` 中一条无效数据（`serverChanKey = "server"`，测试残留）
+
 ## [0.14.0] - 2026-09-24
 
 ### 新增
