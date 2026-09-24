@@ -80,7 +80,7 @@ export function WallPanel() {
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
   // 轮询：让别人的新留言/回复能自动出现（页面不可见时 react-query 会自动暂停）
   const list = trpc.schedule.wallList.useQuery(undefined, {
-    refetchInterval: 15000,
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 5000,

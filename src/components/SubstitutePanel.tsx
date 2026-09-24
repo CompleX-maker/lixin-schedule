@@ -134,7 +134,7 @@ export function SubstitutePanel() {
   const list = trpc.schedule.subList.useQuery(
     { status: statusFilter },
     {
-      refetchInterval: 15000,
+      refetchInterval: 30000,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
       staleTime: 5000,
@@ -702,7 +702,7 @@ function SubDetail({
 }) {
   const detail = trpc.schedule.subDetail.useQuery(
     { id: postId },
-    { refetchInterval: 15000, refetchIntervalInBackground: false },
+    { refetchInterval: 30000, refetchIntervalInBackground: false },
   );
 
   if (detail.isLoading)

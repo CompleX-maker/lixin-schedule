@@ -18,7 +18,8 @@
 
 ### 修复
 - **广场内容不实时更新**：`wallList` / `subList` / `subDetail` 均未配置 `refetchInterval`，只在组件挂载或自己操作后刷新，因此别人发的新留言、新悬赏、接单状态都不会自动出现
-  - 改为 15 秒轮询 + 窗口重新获得焦点时刷新；页面不可见时自动暂停（`refetchIntervalInBackground: false`），不浪费流量
+  - 改为 30 秒轮询 + 窗口重新获得焦点时刷新；页面不可见时自动暂停（`refetchIntervalInBackground: false`），不浪费流量
+  - 离开「广场」标签页时组件卸载，轮询随之停止，只有真正在看广场时才产生请求
 - **管理员开关滑块错位**：轨道 `h-6 w-11`（44×24）配 `w-5`（20）滑块时，原写法混用 `top-0.5` 与 translate，导致滑块未垂直居中且行程不对
   - 改为 `inline-flex items-center` 让滑块自动垂直居中，水平方向用 `translate-x-0.5` / `translate-x-[22px]`（44 − 2 − 20 = 22）
 
