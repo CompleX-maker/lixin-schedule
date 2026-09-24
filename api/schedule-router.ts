@@ -16,6 +16,35 @@ import {
   wallMessageCount,
 } from "./queries/wall";
 import {
+  createReply,
+  deleteReply,
+  getReplyOwner,
+  listRepliesFor,
+  recentReplyCount,
+  replyCountsFor,
+  resolveRealIdentities,
+} from "./queries/replies";
+import {
+  acceptApplicant,
+  applyForSubstitute,
+  cancelApplication,
+  createSubstitutePost,
+  deleteSubstitutePost,
+  getMyApplication,
+  getSubstitutePost,
+  listSubstitutePosts,
+  openSubstituteCount,
+  recentSubstituteCount,
+  updateSubstituteStatus,
+} from "./queries/substitute";
+import {
+  PERIOD_GROUPS,
+  resolveCampus,
+  resolvePeriodGroup,
+  sectionRange,
+} from "../src/lib/campus-timetable";
+
+import {
   recordVisit,
   recentVisits,
   visitByPeriod,
@@ -319,14 +348,82 @@ export const scheduleRouter = createRouter({
       return { ok: true };
     }),
 
-  /** 留言墙：公开列表 */
+  /** 留言墙：公开列表（含回复；真实身份仅管理员可见） */
   wallList: publicQuery.query(async ({ ctx }) => {
     const [list, total] = await Promise.all([
       listWallMessages(ctx.user?.id, 100),
       wallMessageCount(),
     ]);
-    return { list, total };
+
+    const ids = list.map((m) => m.id);
+    const [replies, counts] = await Promise.all([
+      listRepliesFor(ids, ctx.user?.id),
+      replyCountsFor(ids),
+    ]);
+
+    // 仅管理员：解析每条留言/回复背后用户的真实学号姓名
+    let identities = new Map<number, { studentId: string | null; name: string | null }>();
+    const isAdmin = ctx.user?.role === "admin";
+    if (isAdmin) {
+      const uids: number[] = [];
+      for (const m of list) uids.push(m.userId);
+      for (const arr of replies.values()) for (const r of arr) uids.push(r.userId);
+      identities = await resolveRealIdentities(uids);
+    }
+
+    const decorate = (authorId: number) =>
+      isAdmin ? (identities.get(authorId) ?? { studentId: null, name: null }) : null;
+
+    return {
+      list: list.map((m) => ({
+        ...m,
+        replyCount: counts.get(m.id) ?? 0,
+        identity: decorate(m.userId),
+        replies: (replies.get(m.id) ?? []).map((r) => ({
+          ...r,
+          identity: decorate(r.userId),
+        })),
+      })),
+      total,
+      isAdmin,
+    };
   }),
+
+  /** 留言墙：回复（登录用户，30 秒内限 1 条） */
+  wallReply: authedQuery
+    .input(
+      z.object({
+        messageId: z.number().int().positive(),
+        nickname: z.string().trim().min(1).max(32),
+        content: z.string().trim().min(1).max(500),
+        replyToId: z.number().int().positive().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const recent = await recentReplyCount(ctx.user.id, 30);
+      if (recent > 0) throw new Error("回复得太快啦，缓 30 秒～");
+      await createReply({
+        messageId: input.messageId,
+        userId: ctx.user.id,
+        nickname: input.nickname,
+        content: input.content,
+        replyToId: input.replyToId ?? null,
+      });
+      return { ok: true };
+    }),
+
+  /** 留言墙：删除回复（本人或管理员） */
+  wallReplyDelete: authedQuery
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const owner = await getReplyOwner(input.id);
+      if (!owner) throw new Error("回复不存在");
+      if (owner.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new Error("只能删除自己的回复");
+      }
+      await deleteReply(input.id);
+      return { ok: true };
+    }),
 
   /** 留言墙：发布（登录用户，60 秒内限 1 条） */
   wallPost: authedQuery
@@ -365,6 +462,230 @@ export const scheduleRouter = createRouter({
         throw new Error("只能删除自己的留言");
       }
       await deleteWallMessage(input.id);
+      return { ok: true };
+    }),
+
+  /** 作息表：返回各作息组的节次时间，供前端换算与展示 */
+  periodGroups: publicQuery.query(() =>
+    PERIOD_GROUPS.map((g) => ({
+      key: g.key,
+      campus: g.campus,
+      label: g.label,
+      buildings: g.buildings,
+      periodTimes: g.periodTimes,
+    })),
+  ),
+
+  /** 由教室名解析所属校区/作息组与节次时间 */
+  resolveLocation: publicQuery
+    .input(z.object({ location: z.string().max(64), startSection: z.number().int().min(1).max(13), endSection: z.number().int().min(1).max(13) }))
+    .query(({ input }) => {
+      const group = resolvePeriodGroup(input.location);
+      const range = sectionRange(input.location, input.startSection, input.endSection);
+      return {
+        campus: resolveCampus(input.location),
+        groupKey: group.key,
+        groupLabel: group.label,
+        periodTimes: group.periodTimes,
+        range,
+      };
+    }),
+
+  /* ---------------- 代课悬赏 ---------------- */
+
+  /** 代课悬赏：列表 */
+  subList: publicQuery
+    .input(z.object({ status: z.enum(["all", "open", "taken", "done", "closed"]).default("all") }).optional())
+    .query(async ({ ctx, input }) => {
+      const [list, open] = await Promise.all([
+        listSubstitutePosts(ctx.user?.id, 100, input?.status ?? "all"),
+        openSubstituteCount(),
+      ]);
+
+      let identities = new Map<number, { studentId: string | null; name: string | null }>();
+      const isAdmin = ctx.user?.role === "admin";
+      if (isAdmin) {
+        const uids: number[] = [];
+        for (const p of list) {
+          uids.push(p.userId);
+          if (p.takerId) uids.push(p.takerId);
+        }
+        identities = await resolveRealIdentities(uids);
+      }
+      const decorate = (uid?: number | null) =>
+        isAdmin && uid ? (identities.get(uid) ?? { studentId: null, name: null }) : null;
+
+      return {
+        list: list.map((p) => ({
+          ...p,
+          identity: decorate(p.userId),
+          takerIdentity: decorate(p.takerId),
+        })),
+        openCount: open,
+        isAdmin,
+      };
+    }),
+
+  /** 代课悬赏：详情（含报名列表） */
+  subDetail: publicQuery
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const post = await getSubstitutePost(input.id, ctx.user?.id);
+      if (!post) throw new Error("悬赏不存在");
+
+      const myApplication = ctx.user ? await getMyApplication(input.id, ctx.user.id) : null;
+
+      // 报名列表只有发布者和管理员能看
+      const isAdmin = ctx.user?.role === "admin";
+      const canSeeApplicants = post.isMine || isAdmin;
+      if (!canSeeApplicants) {
+        return {
+          ...post,
+          applications: [] as typeof post.applications,
+          applicantsHidden: true,
+          myApplyStatus: myApplication?.status ?? null,
+        };
+      }
+
+      let identities = new Map<number, { studentId: string | null; name: string | null }>();
+      if (isAdmin) {
+        identities = await resolveRealIdentities(post.applications.map((a) => a.userId));
+      }
+      return {
+        ...post,
+        applicantsHidden: false,
+        myApplyStatus: myApplication?.status ?? null,
+        applications: post.applications.map((a) => ({
+          ...a,
+          identity: isAdmin ? (identities.get(a.userId) ?? { studentId: null, name: null }) : null,
+        })),
+      };
+    }),
+
+  /** 代课悬赏：发布（2 分钟内限 1 条） */
+  subCreate: authedQuery
+    .input(
+      z.object({
+        nickname: z.string().trim().min(1).max(32),
+        courseName: z.string().trim().min(1).max(128),
+        location: z.string().trim().min(1).max(64),
+        dayOfWeek: z.number().int().min(1).max(7),
+        startSection: z.number().int().min(1).max(13),
+        endSection: z.number().int().min(1).max(13),
+        classDate: z.string().trim().max(16).nullable().optional(),
+        price: z.number().int().min(0).max(100000),
+        priceNegotiable: z.boolean().default(false),
+        note: z.string().trim().max(500).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.endSection < input.startSection) throw new Error("结束节次不能早于开始节次");
+
+      const recent = await recentSubstituteCount(ctx.user.id, 120);
+      if (recent > 0) throw new Error("发布得太频繁啦，歇两分钟～");
+
+      // 服务端按教学楼作息换算具体时刻，不信任前端传来的时间
+      const range = sectionRange(input.location, input.startSection, input.endSection);
+      if (!range) throw new Error("无法识别该教室的作息时间，请检查上课地点");
+
+      await createSubstitutePost({
+        userId: ctx.user.id,
+        nickname: input.nickname,
+        courseName: input.courseName,
+        campus: resolveCampus(input.location),
+        location: input.location,
+        dayOfWeek: input.dayOfWeek,
+        startSection: input.startSection,
+        endSection: input.endSection,
+        startTime: range.start,
+        endTime: range.end,
+        classDate: input.classDate ?? null,
+        price: input.price,
+        priceNegotiable: input.priceNegotiable,
+        note: input.note ?? null,
+      });
+      return { ok: true, startTime: range.start, endTime: range.end };
+    }),
+
+  /** 代课悬赏：报名接单 */
+  subApply: authedQuery
+    .input(
+      z.object({
+        postId: z.number().int().positive(),
+        nickname: z.string().trim().min(1).max(32),
+        message: z.string().trim().max(200).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const post = await getSubstitutePost(input.postId, ctx.user.id);
+      if (!post) throw new Error("悬赏不存在");
+      if (post.userId === ctx.user.id) throw new Error("不能接自己发的单");
+      if (post.status !== "open") throw new Error("该悬赏已不在招募中");
+
+      const mine = await getMyApplication(input.postId, ctx.user.id);
+      if (mine) throw new Error("你已经报过名了，等待发布者挑选");
+
+      await applyForSubstitute(input.postId, ctx.user.id, input.nickname, input.message ?? null);
+      return { ok: true };
+    }),
+
+  /** 代课悬赏：取消报名 */
+  subCancelApply: authedQuery
+    .input(z.object({ postId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await cancelApplication(input.postId, ctx.user.id);
+      return { ok: true };
+    }),
+
+  /** 代课悬赏：发布者挑选接单者 */
+  subAccept: authedQuery
+    .input(
+      z.object({
+        postId: z.number().int().positive(),
+        applicationId: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const post = await getSubstitutePost(input.postId, ctx.user.id);
+      if (!post) throw new Error("悬赏不存在");
+      if (post.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new Error("只有发布者可以挑选接单者");
+      }
+      const app = post.applications.find((a) => a.id === input.applicationId);
+      if (!app) throw new Error("报名记录不存在");
+
+      await acceptApplicant(input.postId, input.applicationId, app.nickname, app.userId);
+      return { ok: true };
+    }),
+
+  /** 代课悬赏：改状态（发布者或管理员） */
+  subUpdateStatus: authedQuery
+    .input(
+      z.object({
+        postId: z.number().int().positive(),
+        status: z.enum(["open", "taken", "done", "closed"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const post = await getSubstitutePost(input.postId, ctx.user.id);
+      if (!post) throw new Error("悬赏不存在");
+      if (post.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new Error("只能操作自己发布的悬赏");
+      }
+      await updateSubstituteStatus(input.postId, input.status);
+      return { ok: true };
+    }),
+
+  /** 代课悬赏：删除（发布者或管理员） */
+  subDelete: authedQuery
+    .input(z.object({ postId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const post = await getSubstitutePost(input.postId, ctx.user.id);
+      if (!post) throw new Error("悬赏不存在");
+      if (post.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new Error("只能删除自己发布的悬赏");
+      }
+      await deleteSubstitutePost(input.postId);
       return { ok: true };
     }),
 

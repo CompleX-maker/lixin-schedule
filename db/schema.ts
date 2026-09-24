@@ -224,3 +224,120 @@ export const wallLikes = mysqlTable(
 );
 
 
+
+/* ================================================================== *
+ * 留言回复
+ * ================================================================== */
+
+/** 留言回复：挂在某条留言下；结构上只支持一层（回复的回复也挂到根留言） */
+export const wallReplies = mysqlTable(
+  "wall_replies",
+  {
+    id: serial("id").primaryKey(),
+    messageId: bigint("messageId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => wallMessages.id, { onDelete: "cascade" }),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 32 }).notNull(),
+    content: varchar("content", { length: 500 }).notNull(),
+    /** 被回复的回复 id（用于 @某人），为空表示直接回复留言 */
+    replyToId: bigint("replyToId", { mode: "number", unsigned: true }),
+    replyToNickname: varchar("replyToNickname", { length: 32 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [index("idx_reply_message").on(table.messageId, table.createdAt)],
+);
+
+export type WallReply = typeof wallReplies.$inferSelect;
+
+/* ================================================================== *
+ * 代课悬赏
+ * ================================================================== */
+
+/**
+ * 代课悬赏单。
+ *
+ * 时间字段同时存「节次」和「具体时刻」：
+ *   - 节次用于按作息表换算，保证换校区/换教学楼也准确；
+ *   - 具体时刻在发布时由前端按所选教学楼算出并固化，便于列表直接展示。
+ */
+export const substitutePosts = mysqlTable(
+  "substitute_posts",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 32 }).notNull(),
+    courseName: varchar("courseName", { length: 128 }).notNull(),
+    /** 校区：松江 / 浦东 */
+    campus: varchar("campus", { length: 16 }).notNull(),
+    /** 上课地点（教室名，用于换算作息） */
+    location: varchar("location", { length: 64 }).notNull(),
+    /** 星期 1-7 */
+    dayOfWeek: int("dayOfWeek").notNull(),
+    /** 起始节 / 结束节 */
+    startSection: int("startSection").notNull(),
+    endSection: int("endSection").notNull(),
+    /** 由教学楼作息换算出的具体时刻，如 08:30 / 10:05 */
+    startTime: varchar("startTime", { length: 8 }).notNull(),
+    endTime: varchar("endTime", { length: 8 }).notNull(),
+    /** 具体日期（可选，例如只代某一天） */
+    classDate: varchar("classDate", { length: 16 }),
+    /** 悬赏价格（元），0 表示面议 */
+    price: int("price").notNull().default(0),
+    /** 是否面议 */
+    priceNegotiable: boolean("priceNegotiable").default(false).notNull(),
+    /** 补充说明：要求、联系方式提示等 */
+    note: varchar("note", { length: 500 }),
+    /** 状态：open 招募中 / taken 已接单 / done 已完成 / closed 已取消 */
+    status: mysqlEnum("status", ["open", "taken", "done", "closed"])
+      .default("open")
+      .notNull(),
+    /** 当前确认接单者 */
+    takerId: bigint("takerId", { mode: "number", unsigned: true }).references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    takerNickname: varchar("takerNickname", { length: 32 }),
+    takenAt: timestamp("takenAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("idx_sub_status").on(table.status, table.createdAt),
+    index("idx_sub_user").on(table.userId),
+  ],
+);
+
+export type SubstitutePost = typeof substitutePosts.$inferSelect;
+
+/** 代课报名：一条悬赏可有多人报名，发布者挑选确认 */
+export const substituteApplications = mysqlTable(
+  "substitute_applications",
+  {
+    id: serial("id").primaryKey(),
+    postId: bigint("postId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => substitutePosts.id, { onDelete: "cascade" }),
+    userId: bigint("userId", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 32 }).notNull(),
+    /** 报名留言 */
+    message: varchar("message", { length: 200 }),
+    /** 状态：pending 待挑选 / accepted 已选中 / rejected 未选中 */
+    status: mysqlEnum("status", ["pending", "accepted", "rejected"])
+      .default("pending")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("uniq_sub_apply").on(table.postId, table.userId)],
+);
+
+export type SubstituteApplication = typeof substituteApplications.$inferSelect;

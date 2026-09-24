@@ -12,6 +12,9 @@ import { Footer } from "@/components/Footer";
 import { QuipTicker } from "@/components/QuipTicker";
 import { QUIPS } from "@/lib/quips";
 import { PokeBuddy } from "@/components/PokeBuddy";
+import { InstallBanner } from "@/components/InstallBanner";
+import { InstallFab } from "@/components/InstallFab";
+import { WeChatGuide } from "@/components/WeChatGuide";
 import { CalendarDays, Clock3, Eye, EyeOff, MessagesSquare, UserRound } from "lucide-react";
 
 type Tab = "today" | "week" | "square" | "mine";
@@ -262,12 +265,20 @@ function AuthedApp() {
               <WeekGrid courses={courses} config={cfg} week={w} setWeek={setWeek} />
             )}
             {tab === "square" && <SquarePanel />}
-            {tab === "mine" && <MinePanel />}
+            {tab === "mine" && (
+              <div className="space-y-4">
+                <InstallBanner />
+                <MinePanel />
+              </div>
+            )}
             <Footer />
             <AnnouncementPopup />
           </motion.div>
         </AnimatePresence>
       </main>
+
+      <WeChatGuide />
+      <InstallFab />
 
       <div className="fixed inset-x-0 bottom-0 z-30">
         <div className="mx-auto max-w-lg">
