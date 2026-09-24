@@ -38,8 +38,8 @@ const LOADING_LINES = [
 export default function Home() {
   const me = trpc.schedule.me.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const [adminOverride, setAdminOverride] = useState(false);
-  // 游客点了「登录」后，本次会话内直接展示登录页
-  const [forceLogin, setForceLogin] = useState(false);
+  // 用户在登录页点了「先看看效果」，进入游客预览
+  const [guestPreview, setGuestPreview] = useState(false);
 
   if (me.isLoading) {
     return (
@@ -52,12 +52,19 @@ export default function Home() {
   const isStudent = !!me.data?.studentId;
   const needKimiGate = !!me.data && !isStudent && !adminOverride;
 
-  // 未登录：给游客模式，先看演示课表；想登录时再切到登录页
+  // 未登录：默认看登录页；用户主动点「预览」才进游客模式
   if (!me.data) {
-    return forceLogin ? (
-      <LoginView kimiUser={null} onEnterAdmin={() => setAdminOverride(true)} />
+    return guestPreview ? (
+      <GuestApp
+        onLogin={() => setGuestPreview(false)}
+        onBack={() => setGuestPreview(false)}
+      />
     ) : (
-      <GuestApp onLogin={() => setForceLogin(true)} />
+      <LoginView
+        kimiUser={null}
+        onEnterAdmin={() => setAdminOverride(true)}
+        onPreview={() => setGuestPreview(true)}
+      />
     );
   }
 
@@ -66,6 +73,7 @@ export default function Home() {
       <LoginView
         kimiUser={me.data && !isStudent ? me.data : null}
         onEnterAdmin={() => setAdminOverride(true)}
+        onPreview={() => setGuestPreview(true)}
       />
     );
   }
@@ -76,9 +84,11 @@ export default function Home() {
 function LoginView({
   kimiUser,
   onEnterAdmin,
+  onPreview,
 }: {
   kimiUser: { name: string | null; role: string } | null;
   onEnterAdmin: () => void;
+  onPreview: () => void;
 }) {
   const utils = trpc.useUtils();
   const [studentId, setStudentId] = useState("");
@@ -214,6 +224,15 @@ function LoginView({
               <br />
               课表只存在你自己的账号下，换设备重新登录
             </p>
+            {/* 预览入口：给还在犹豫要不要登录的人一个低门槛的「先看看」 */}
+            <button
+              onClick={onPreview}
+              className="mx-auto flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+            >
+              <Eye className="h-3 w-3" />
+              不确定要不要登录？先看看效果
+            </button>
+
             {kimiUser && (
               <button
                 onClick={onEnterAdmin}
@@ -241,7 +260,7 @@ function LoginView({
  * 让访客直观了解产品形态，再决定要不要登录。
  * 「我的」标签页在游客模式下不出现，避免暴露账号相关 UI。
  */
-function GuestApp({ onLogin }: { onLogin: () => void }) {
+function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void }) {
   const [tab, setTab] = useState<Tab>("today");
   const [week, setWeek] = useState<number | null>(null);
   const config = trpc.schedule.config.useQuery();
@@ -268,7 +287,7 @@ function GuestApp({ onLogin }: { onLogin: () => void }) {
         </div>
       </header>
 
-      <GuestBanner onLogin={onLogin} />
+      <GuestBanner onLogin={onLogin} onBack={onBack} />
 
       <main className="flex-1 px-4 py-4">
         <AnimatePresence mode="wait" initial={false}>
