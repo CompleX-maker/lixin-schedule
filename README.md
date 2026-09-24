@@ -51,7 +51,9 @@ npm start           # 生产模式（含定时同步与提醒调度器）
 
 ```bash
 DATABASE_URL=mysql://user:pass@127.0.0.1:3306/lixin_schedule
-APP_SECRET=<随机长字符串，用于密码加密与会话签名，改了就全掉线>
+APP_SECRET=<主密钥，用 openssl rand -base64 32 生成>
+             # 用于派生「教务密码加密」与「会话签名」两把独立子密钥
+             # 改了会导致全员掉线，且已存的加密密码无法解密
 APP_ID=selfhost
 KIMI_AUTH_URL=https://example.invalid
 KIMI_OPEN_URL=https://example.invalid
@@ -60,6 +62,9 @@ VITE_KIMI_AUTH_URL=https://example.invalid
 ADMIN_STUDENT_IDS=251650330   # 这些学号登录后自动成为管理员（逗号分隔）
 PORT=3000
 ```
+
+密钥管理、加密算法选择与已知不足，见 [SECURITY.md](./SECURITY.md)。
+
 
 需要 HTTPS 时建议前面挂 Nginx / Caddy 反代到 3000 端口。邮件提醒需在管理员配置中设置 SMTP（QQ 邮箱授权码），或使用 Server酱。
 
