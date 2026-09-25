@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,17 +72,31 @@ export function MinePanel() {
     digestHour: 21,
     serverChanKey: "",
   });
+  // 只在「服务端数据首次到达」和「保存成功后」同步表单，
+  // 否则窗口重新获得焦点触发 refetch 时，会把用户还没保存的改动覆盖掉。
+  const syncedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (reminder.data) {
-      setRemForm({
-        email: reminder.data.email ?? "",
-        enableClassReminder: reminder.data.enableClassReminder,
-        minutesBefore: reminder.data.minutesBefore,
-        enableDailyDigest: reminder.data.enableDailyDigest,
-        digestHour: reminder.data.digestHour,
-        serverChanKey: reminder.data.serverChanKey ?? "",
-      });
-    }
+    if (!reminder.data) return;
+    // 用关键字段做指纹，只有服务端数据真的变了才覆盖
+    const fingerprint = JSON.stringify([
+      reminder.data.email,
+      reminder.data.enableClassReminder,
+      reminder.data.minutesBefore,
+      reminder.data.enableDailyDigest,
+      reminder.data.digestHour,
+      reminder.data.serverChanKey,
+    ]);
+    if (syncedRef.current === fingerprint) return;
+    syncedRef.current = fingerprint;
+
+    setRemForm({
+      email: reminder.data.email ?? "",
+      enableClassReminder: reminder.data.enableClassReminder,
+      minutesBefore: reminder.data.minutesBefore,
+      enableDailyDigest: reminder.data.enableDailyDigest,
+      digestHour: reminder.data.digestHour,
+      serverChanKey: reminder.data.serverChanKey ?? "",
+    });
   }, [reminder.data]);
 
   const s = status.data;
@@ -171,7 +185,19 @@ export function MinePanel() {
             </div>
             <Switch
               checked={remForm.enableClassReminder}
-              onCheckedChange={(v) => setRemForm({ ...remForm, enableClassReminder: v })}
+              disabled={updateReminder.isPending}
+              onCheckedChange={(v) => {
+                setRemForm({ ...remForm, enableClassReminder: v });
+                // 开关类设置立即保存，避免用户忘了点「保存」而以为已生效
+                updateReminder.mutate({
+                  email: remForm.email || null,
+                  enableClassReminder: v,
+                  minutesBefore: remForm.minutesBefore,
+                  enableDailyDigest: remForm.enableDailyDigest,
+                  digestHour: remForm.digestHour,
+                  serverChanKey: remForm.serverChanKey || null,
+                });
+              }}
             />
           </div>
           {remForm.enableClassReminder && (
@@ -193,7 +219,18 @@ export function MinePanel() {
             </div>
             <Switch
               checked={remForm.enableDailyDigest}
-              onCheckedChange={(v) => setRemForm({ ...remForm, enableDailyDigest: v })}
+              disabled={updateReminder.isPending}
+              onCheckedChange={(v) => {
+                setRemForm({ ...remForm, enableDailyDigest: v });
+                updateReminder.mutate({
+                  email: remForm.email || null,
+                  enableClassReminder: remForm.enableClassReminder,
+                  minutesBefore: remForm.minutesBefore,
+                  enableDailyDigest: v,
+                  digestHour: remForm.digestHour,
+                  serverChanKey: remForm.serverChanKey || null,
+                });
+              }}
             />
           </div>
           {remForm.enableDailyDigest && (
