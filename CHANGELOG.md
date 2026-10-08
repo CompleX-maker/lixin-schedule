@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.2] - 2026-10-08
+
+### 修复（服务器运维）
+- **DNS 解析故障导致教务同步与推送全部失效**
+  - 现象：aTrust 会话显示有效，但教务登录报 `fetch failed`；Server酱 推送连接超时
+  - 排查：`lxjw.lixin.edu.cn` 可访问且 `curl` 正常，唯独 Node 的 `fetch` 失败；
+    进一步定位到登录链路还依赖第二个域名 `cas.paas.lixin.edu.cn`，
+    该域名在系统 DNS 上返回 `ENOTFOUND`
+  - 根因：服务器 `resolv.conf` 只配置了阿里云内网 DNS `100.100.2.136/138`，
+    这两个地址当时不可达（后自行恢复），且无备用 DNS。
+    `lxjw` 恰好被 aTrust 的 DNS 拦截解析到隧道地址，因此单看它像是「网络正常」，
+    而 CAS 域名位于公共 CDN（`103.41.1.x`）不在 aTrust 解析范围内，直接解析失败
+  - 修复：改为「公共 DNS 优先 + 内网 DNS 兜底」并持久化到 NetworkManager
+    ```
+    nameserver 223.5.5.5
+    nameserver 114.114.114.114
+    nameserver 100.100.2.136
+    options timeout:2 attempts:2
+    ```
+  - 验证：教务登录恢复（拉取 16 门课）、Server酱 推送恢复、外网 HTTP 200
+
+### 修复
+- 提醒开关的「切换即保存」增加保护：服务端数据未加载完成前禁止切换，
+  避免用表单默认值覆盖服务端已有设置（如误清空 SendKey）
+
 ## [0.15.1] - 2026-09-25
 
 ### 修复

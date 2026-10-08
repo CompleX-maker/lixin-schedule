@@ -185,8 +185,9 @@ export function MinePanel() {
             </div>
             <Switch
               checked={remForm.enableClassReminder}
-              disabled={updateReminder.isPending}
+              disabled={updateReminder.isPending || !reminder.data}
               onCheckedChange={(v) => {
+                if (!reminder.data) return; // 数据未就绪时不动服务端
                 setRemForm({ ...remForm, enableClassReminder: v });
                 // 开关类设置立即保存，避免用户忘了点「保存」而以为已生效
                 updateReminder.mutate({
@@ -219,8 +220,9 @@ export function MinePanel() {
             </div>
             <Switch
               checked={remForm.enableDailyDigest}
-              disabled={updateReminder.isPending}
+              disabled={updateReminder.isPending || !reminder.data}
               onCheckedChange={(v) => {
+                if (!reminder.data) return; // 数据未就绪时不动服务端
                 setRemForm({ ...remForm, enableDailyDigest: v });
                 updateReminder.mutate({
                   email: remForm.email || null,
