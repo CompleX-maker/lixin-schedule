@@ -62,13 +62,14 @@ export default function Home() {
   // 用户在登录页点了「先看看效果」，进入游客预览
   const [guestPreview, setGuestPreview] = useState(false);
 
-  if (me.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  /* ⚠️ 下面这段必须写在任何 return 之前。
+     之前它被放在 `if (me.isLoading) return <转圈/>` 之后，
+     于是「加载中」那次渲染只有 3 个 hook、「加载完」那次有 5 个，
+     React 直接抛 "Rendered more hooks than during the previous render"，
+     并且把最后一次成功的画面（转圈/白屏）一直留在屏幕上 ——
+     表现就是整站卡在加载中，既不显示登录页，也跳不回去。
+     eslint 的 react-hooks/rules-of-hooks 本来就能发现，别再挪下去了。 */
+
   // 带 redirect 参数时：已登录就立即跳回去（顺带触发会话 cookie 升级）
   const redirectTarget = safeRedirectTarget();
   const jumpedRef = useRef(false);
@@ -80,6 +81,14 @@ export default function Home() {
     const t = setTimeout(() => window.location.replace(redirectTarget), 400);
     return () => clearTimeout(t);
   }, [redirectTarget, me.data?.studentId]);
+
+  if (me.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // Kimi 管理员身份需显式进入（它没有学号，不能直接当学生用）
   const isStudent = !!me.data?.studentId;

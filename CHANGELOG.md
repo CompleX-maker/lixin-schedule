@@ -5,6 +5,22 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.7] - 2026-10-10
+
+### 修复
+- **整站卡在加载中（严重）**：`0.15.6` 引入的 `?redirect=` 支持把
+  `useRef` / `useEffect` 写在了 `if (me.isLoading) return <转圈/>` **之后**，
+  导致「加载中」那次渲染只有 3 个 hook、「加载完」那次有 5 个。
+  React 抛出 `Rendered more hooks than during the previous render`，
+  并一直把最后一次成功渲染的画面（转圈 / 白屏）留在屏幕上。
+
+  表现：
+  - 从电费站跳过来后，课表站永远停在转圈，既不显示登录页，也不会跳回去
+  - 直接打开课表站也是白屏 —— **所有用户、所有新开的页面都会中招**
+
+  修复：把这段逻辑整体移到早退之前，保证每次渲染 hook 数量一致。
+  同时开启 `react-hooks/rules-of-hooks` 检查（配置里本来就有，只是提交前没跑 lint）。
+
 ## [0.15.6] - 2026-10-10
 
 ### 新增
