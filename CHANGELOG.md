@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.8] - 2026-10-10
+
+### 文档
+- 更新 README，补齐此前一直没写进文档的模块：
+  - 广场（留言墙 / 代课悬赏 / 戳一戳）、PWA 安装与游客预览、管理员功能
+  - 新增「多站单点登录」一节，说明 `COOKIE_DOMAIN`、密钥派生约定
+    与 `?redirect=` 的安全校验规则（只放行 `https` + `stellaura.tech` 及其子域）
+  - `.env` 示例补上 `COOKIE_DOMAIN`
+
 ## [0.15.7] - 2026-10-10
 
 ### 修复

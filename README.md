@@ -11,6 +11,9 @@
 - **今日视图**：下一节课倒计时圆环、上课中状态、当日时间线
 - **提醒**：上课前 N 分钟推送（邮件 / Server酱）、每晚推送明日课表
 - **自动校准**：开学日期与节次时间从教务系统课表数据中自动提取，无需手工维护
+- **广场**：留言墙（公开、支持楼中楼回复）、代课悬赏（自定义上课时间与酬劳，可发布 / 接取）、戳一戳 Q 版吉祥物
+- **安装到桌面**：PWA，支持添加到主屏幕，登录页提供「不想登录？点这里预览」的游客入口
+- **管理员**：公告发布（自动过期）、访客统计、代课与留言管理、管理员权限开关
 - **隐私**：课表按学号独立存储；密码 AES-256-GCM 加密，仅用于课表同步；换设备需重新登录
 
 ## 技术栈
@@ -19,6 +22,35 @@
 - 后端：Hono + tRPC 11（端到端类型安全）
 - 数据库：MySQL + Drizzle ORM
 - 会话：jose JWT（httpOnly cookie，30 天）
+
+## 多站单点登录（跨子站共享会话）
+
+本站是账号体系的源头，子站（[电费监测站](https://epower.stellaura.tech)）复用本站会话，不再各自维护一套账号。
+
+**共享方式**：本站登录成功后签发 HS256 JWT 写入 cookie `lixin_jw_sid`。把这个 cookie 的
+`Domain` 配成 `.stellaura.tech`（环境变量 `COOKIE_DOMAIN`），浏览器在访问任何
+`*.stellaura.tech` 子域时都会自动带上，子站本地验签即可取出学号，无需回源本站。
+
+密钥派生约定（子站必须保持一致）：
+
+```
+JWT 载荷：{ sid: <学号>, iat, exp }
+算法    ：HS256
+密钥    ：scrypt(APP_SECRET, "lixin-jw-session-v1", 32)
+```
+
+> 注意 `APP_SECRET` 在本站内部派生出**两把互不相通的子密钥**：
+> 一把用于加密教务密码（salt `lixin-schedule-v1`），一把用于会话签名（salt `lixin-jw-session-v1`）。
+> 子站只拿得到签名那一把的输入，推不出加密那一把。
+
+**跨站跳转**：子站引导用户来本站登录时会带上回跳地址：
+
+```
+https://stellaura.tech/?redirect=https%3A%2F%2Fepower.stellaura.tech%2F
+```
+
+本站登录成功（或本来就已登录）后自动 `location.replace` 回去。
+`?redirect=` 有安全校验，**只放行 `https` 且域名为 `stellaura.tech` 或其子域**，避免变成开放重定向。
 
 ## 教务系统逆向说明
 
@@ -60,6 +92,7 @@ KIMI_OPEN_URL=https://example.invalid
 VITE_APP_ID=selfhost
 VITE_KIMI_AUTH_URL=https://example.invalid
 ADMIN_STUDENT_IDS=251650330   # 这些学号登录后自动成为管理员（逗号分隔）
+COOKIE_DOMAIN=.stellaura.tech # 会话 cookie 的 Domain，用于跨子站 SSO（见下节）
 PORT=3000
 ```
 
