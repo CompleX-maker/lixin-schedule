@@ -199,7 +199,7 @@ export const scheduleRouter = createRouter({
     .input(z.object({ studentId: z.string().min(4).max(64), password: z.string().min(1).max(128) }))
     .mutation(async ({ ctx, input }) => {
       const { count, name } = await loginAndSync(input.studentId, input.password);
-      const token = await signJwSession(input.studentId);
+      const token = await signJwSession(input.studentId, name);
       const opts = getSessionCookieOptions(ctx.req.headers);
       ctx.resHeaders.append(
         "set-cookie",
@@ -255,7 +255,7 @@ export const scheduleRouter = createRouter({
       const m = /^jw:(\d+)$/.exec(ctx.user.unionId ?? "");
       if (m && process.env.COOKIE_DOMAIN) {
         const opts = getSessionCookieOptions(ctx.req.headers);
-        const fresh = await signJwSession(m[1]);
+        const fresh = await signJwSession(m[1], binding?.realName ?? ctx.user.name ?? null);
         ctx.resHeaders.append(
           "set-cookie",
           cookie.serialize(JW_SESSION_COOKIE, fresh, {

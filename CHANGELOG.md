@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.9] - 2026-10-10
+
+### 变更
+- **共享会话 JWT 里带上姓名**：`signJwSession(studentId, name?)`，载荷从
+  `{sid}` 扩展为 `{sid, name}`，供子站（电费站）做访客统计时显示人名，
+  不必再回源本站查用户名
+  - 向后兼容：`name` 可选，老 cookie 没有这个字段，子站读不到就当 `null`
+  - 登录时与 `me` 的会话升级路径都会带上姓名
+
 ## [0.15.8] - 2026-10-10
 
 ### 文档

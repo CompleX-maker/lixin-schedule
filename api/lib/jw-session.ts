@@ -16,8 +16,13 @@ function key(): Uint8Array {
   return crypto.scryptSync(secret, "lixin-jw-session-v1", 32);
 }
 
-export async function signJwSession(studentId: string): Promise<string> {
-  return new SignJWT({ sid: studentId })
+export async function signJwSession(
+  studentId: string,
+  name?: string | null,
+): Promise<string> {
+  // name 可选：子站（电费站）靠它显示访客姓名。
+  // 不写进 payload 也不会破坏老逻辑，子站读不到就当 null。
+  return new SignJWT({ sid: studentId, ...(name ? { name } : {}) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${JW_SESSION_MAX_AGE_S}s`)
