@@ -209,6 +209,8 @@ export const scheduleRouter = createRouter({
           sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
           secure: opts.secure,
           maxAge: JW_SESSION_MAX_AGE_S,
+          // 带上 Domain 才能共享给子域名（epower 复用它做 SSO）
+          ...(opts.domain ? { domain: opts.domain } : {}),
         }),
       );
       return { ok: true as const, name: name ?? input.studentId, count };
@@ -224,6 +226,7 @@ export const scheduleRouter = createRouter({
         sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
         secure: opts.secure,
         maxAge: 0,
+        ...(opts.domain ? { domain: opts.domain } : {}),
       }),
     );
     return { ok: true };

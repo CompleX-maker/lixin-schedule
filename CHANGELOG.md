@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.4] - 2026-10-10
+
+### 新增
+- **会话 cookie 支持跨子域名共享**：新增 `COOKIE_DOMAIN` 环境变量
+  - 配置为 `.stellaura.tech` 后，登录状态可被 `epower.stellaura.tech` 复用（SSO）
+  - 未配置时保持原行为（主机专属 cookie），不影响其他部署
+  - `logout` 同步带上 Domain，确保子域名的 cookie 也能被清除
+
+### 说明
+- 该改动是为「电费监测站」复用课表登录状态而做；两站共用同一份 JWT 验证逻辑
+
 ## [0.15.3] - 2026-10-10
 
 ### 新增
