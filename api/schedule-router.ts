@@ -247,6 +247,31 @@ export const scheduleRouter = createRouter({
     } catch {
       /* 统计失败不阻断身份查询 */
     }
+    // 会话 cookie 升级：早期签发的 cookie 不含 Domain 属性（主机专属），
+    // 子域名（如 epower.stellaura.tech）读不到，会导致 SSO 失效。
+    // 这里在每次读取身份时顺手用当前配置重签一次，
+    // 老用户下次打开页面就会自动升级，无需手动退出重登。
+    try {
+      const m = /^jw:(\d+)$/.exec(ctx.user.unionId ?? "");
+      if (m && process.env.COOKIE_DOMAIN) {
+        const opts = getSessionCookieOptions(ctx.req.headers);
+        const fresh = await signJwSession(m[1]);
+        ctx.resHeaders.append(
+          "set-cookie",
+          cookie.serialize(JW_SESSION_COOKIE, fresh, {
+            httpOnly: opts.httpOnly,
+            path: opts.path,
+            sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
+            secure: opts.secure,
+            maxAge: JW_SESSION_MAX_AGE_S,
+            ...(opts.domain ? { domain: opts.domain } : {}),
+          }),
+        );
+      }
+    } catch {
+      /* 升级失败不影响身份读取 */
+    }
+
     return {
       name: ctx.user.name,
       role: ctx.user.role,
