@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.6] - 2026-10-10
+
+### 新增
+- **支持 `?redirect=` 跨站跳转**：供子站（电费站）登录后自动跳回
+  - 安全校验：只放行 `https` 且域名为 `stellaura.tech` 或其子域，避免开放重定向
+  - 已登录时立即跳回（同时触发会话 cookie 升级）
+  - 未登录时走登录流程，登录成功后跳回
+  - 跳转前延迟 400ms，确保 Set-Cookie 已被浏览器接收
+
 ## [0.15.5] - 2026-10-10
 
 ### 修复

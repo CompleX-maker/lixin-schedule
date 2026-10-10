@@ -20,6 +20,27 @@ import { CalendarDays, Clock3, Eye, EyeOff, MessagesSquare, UserRound } from "lu
 
 type Tab = "today" | "week" | "square" | "mine";
 
+/**
+ * 解析 ?redirect= 参数并做安全校验。
+ *
+ * 用于跨站跳转（例如从电费站过来登录，登录后跳回去）。
+ * 只允许 https + 自家域名，避免变成开放重定向被人利用。
+ */
+function safeRedirectTarget(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("redirect");
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return null;
+    // 只放行 stellaura.tech 及其子域名
+    if (u.hostname !== "stellaura.tech" && !u.hostname.endsWith(".stellaura.tech")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 const TABS: { key: Tab; label: string; icon: typeof Clock3 }[] = [
   { key: "today", label: "今日", icon: Clock3 },
   { key: "week", label: "课表", icon: CalendarDays },
@@ -48,6 +69,18 @@ export default function Home() {
       </div>
     );
   }
+  // 带 redirect 参数时：已登录就立即跳回去（顺带触发会话 cookie 升级）
+  const redirectTarget = safeRedirectTarget();
+  const jumpedRef = useRef(false);
+  useEffect(() => {
+    if (!redirectTarget || jumpedRef.current) return;
+    if (!me.data?.studentId) return;
+    jumpedRef.current = true;
+    // 稍等一下，确保 me 接口下发的 Set-Cookie 已被浏览器接收
+    const t = setTimeout(() => window.location.replace(redirectTarget), 400);
+    return () => clearTimeout(t);
+  }, [redirectTarget, me.data?.studentId]);
+
   // Kimi 管理员身份需显式进入（它没有学号，不能直接当学生用）
   const isStudent = !!me.data?.studentId;
   const needKimiGate = !!me.data && !isStudent && !adminOverride;
@@ -106,6 +139,9 @@ function LoginView({
       timers.current.forEach(clearInterval);
       setTimeout(async () => {
         await utils.schedule.invalidate();
+        // 登录完成后若带 redirect，就跳回去（cookie 已按当前配置下发）
+        const target = safeRedirectTarget();
+        if (target) window.location.replace(target);
       }, 500);
     },
     onError: (e) => {
