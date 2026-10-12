@@ -193,6 +193,50 @@ async function syncUser(userId: number): Promise<{ count: number }> {
   }
 }
 
+/**
+ * 清掉会话 cookie —— **两种都得清**。
+ *
+ * 浏览器是按 name + domain + path 三元组存 cookie 的，而本站历史上签发过两种：
+ *   - 带 Domain=.stellaura.tech 的（COOKIE_DOMAIN 生效之后）
+ *   - 不带 Domain 的「主机专属」cookie（COOKIE_DOMAIN 生效之前）
+ *
+ * 这两条同名同路径，浏览器会**同时带着**发给服务端，读到哪个不确定。
+ * 只清其中一条，用户就会遇到「点了退出没反应」—— 更糟的是，
+ * 紧接着 me 会从残留的那条里读到身份，又把 cookie 重新签发回来，
+ * 于是还可能**切换成另一个账号**。
+ */
+function clearSessionCookies(resHeaders: Headers, reqHeaders: Headers) {
+  const opts = getSessionCookieOptions(reqHeaders);
+  const clear = (domain?: string) =>
+    resHeaders.append(
+      "set-cookie",
+      cookie.serialize(JW_SESSION_COOKIE, "", {
+        httpOnly: opts.httpOnly,
+        path: opts.path,
+        sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
+        secure: opts.secure,
+        maxAge: 0,
+        ...(domain ? { domain } : {}),
+      }),
+    );
+  clear(opts.domain); // 带 Domain 的那条
+  clear(); // 主机专属的那条
+}
+
+/** 只清「主机专属」那条（me 升级时用来淘汰老 cookie） */
+function clearHostOnlySessionCookie(resHeaders: Headers, opts: { httpOnly?: boolean; path?: string; sameSite?: string; secure?: boolean }) {
+  resHeaders.append(
+    "set-cookie",
+    cookie.serialize(JW_SESSION_COOKIE, "", {
+      httpOnly: opts.httpOnly,
+      path: opts.path,
+      sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
+      secure: opts.secure,
+      maxAge: 0,
+    }),
+  );
+}
+
 export const scheduleRouter = createRouter({
   /** 教务账密登录：验证 + 抓课表 + 建档 + 发 cookie */
   login: publicQuery
@@ -217,18 +261,7 @@ export const scheduleRouter = createRouter({
     }),
 
   logout: publicQuery.mutation(({ ctx }) => {
-    const opts = getSessionCookieOptions(ctx.req.headers);
-    ctx.resHeaders.append(
-      "set-cookie",
-      cookie.serialize(JW_SESSION_COOKIE, "", {
-        httpOnly: opts.httpOnly,
-        path: opts.path,
-        sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-        secure: opts.secure,
-        maxAge: 0,
-        ...(opts.domain ? { domain: opts.domain } : {}),
-      }),
-    );
+    clearSessionCookies(ctx.resHeaders, ctx.req.headers);
     return { ok: true };
   }),
 
@@ -267,6 +300,11 @@ export const scheduleRouter = createRouter({
             ...(opts.domain ? { domain: opts.domain } : {}),
           }),
         );
+        // 顺手清掉可能存在的「主机专属」旧 cookie。
+        // COOKIE_DOMAIN 生效之前登录的用户，浏览器里会同时存着
+        // 不带 Domain 的老 cookie 和带 Domain 的新 cookie（同名同路径）。
+        // 不清掉老的那个，登出就只清得掉一半 —— 见 clearSessionCookies 的注释。
+        clearHostOnlySessionCookie(ctx.resHeaders, opts);
       }
     } catch {
       /* 升级失败不影响身份读取 */
