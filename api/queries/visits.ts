@@ -6,10 +6,40 @@ import { getDb } from "./connection";
 const DEDUP_WINDOW_MS = 5 * 60 * 1000;
 
 /**
+ * 同一用户的并发请求合并表（single-flight）。
+ *
+ * 原实现是「先 SELECT 查 5 分钟内有没有记录，没有就 INSERT」——
+ * 典型的 check-then-insert 竞态：两个并发请求会**同时**通过检查，
+ * 然后各插一条，产生毫秒级相邻的重复流水。
+ *
+ * 这里把同一 userId 的并发调用合并成一次：后到的请求直接复用进行中的 Promise。
+ *
+ * 前提：本应用是单 Node 进程（systemd 各跑一个，未开 cluster）。
+ * 若将来改成多实例部署，需要换成数据库层的原子约束。
+ */
+const inFlightVisits = new Map<number, Promise<boolean>>();
+
+/**
  * 记录一次访问。5 分钟内同一用户只记一条，避免刷新页面时刷屏。
  * 仅保存身份快照，不记录 IP。
  */
-export async function recordVisit(input: {
+export function recordVisit(input: {
+  userId: number;
+  studentId?: string | null;
+  realName?: string | null;
+  college?: string | null;
+}): Promise<boolean> {
+  const running = inFlightVisits.get(input.userId);
+  if (running) return running;
+
+  const task = doRecordVisit(input).finally(() => {
+    inFlightVisits.delete(input.userId);
+  });
+  inFlightVisits.set(input.userId, task);
+  return task;
+}
+
+async function doRecordVisit(input: {
   userId: number;
   studentId?: string | null;
   realName?: string | null;

@@ -54,9 +54,12 @@ https://stellaura.tech/?redirect=https%3A%2F%2Fepower.stellaura.tech%2F
 
 ## 教务系统逆向说明
 
-> ⚠️ **2026-09-20 起，教务相关域名已接入深信服 aTrust 零信任网关**，服务端直接抓取会被网关拦截（表现为 302 跳转到 `atrust.lixin.edu.cn` 进行 JS 环境校验）。服务器需先上线 aTrust 客户端，之后的抓取链路才可用。部署方法见 [自部署 aTrust 客户端](#自部署-atrust-客户端服务器侧必读)。
+> ⚠️ **网络前提**：`lxjw.lixin.edu.cn`（教务）的公网 IP `202.121.255.139` **从校园网外不可达**
+> （直连 `HTTP 000`），只能经由学校 aTrust 隧道；而从**校园网内**访问是正常的。
+> 生产环境的做法是**用一台校内机器做反向隧道**，让抓取请求从校内网发出，
+> 从而完全不需要 aTrust 客户端。详见 [教务系统的网络可达性](#教务系统的网络可达性)。
 
-CAS 认证链路（aTrust 放行后）：
+CAS 认证链路（校内隧道可达后）：
 
 1. `GET /cas/login` 取 `execution`
 2. `GET /cas/jwt/publicKey` 取 RSA 公钥，密码 PKCS#1 v1.5 加密后加 `__RSA__` 前缀
@@ -101,7 +104,114 @@ PORT=3000
 
 需要 HTTPS 时建议前面挂 Nginx / Caddy 反代到 3000 端口。邮件提醒需在管理员配置中设置 SMTP（QQ 邮箱授权码），或使用 Server酱。
 
-### 自部署 aTrust 客户端（服务器侧，必读）
+### 教务系统的网络可达性
+
+`lxjw.lixin.edu.cn` 解析到 `202.121.255.139`，这个 IP **从公网不可达**（直连 `HTTP 000`），
+只能经由学校 aTrust 隧道；而从**校园网内**访问是正常的（302 跳 CAS 登录）。
+
+最初的做法是在服务器上跑 aTrust 客户端（GUI + 企业微信扫码），但学校**每天 06:00 强制下线**，
+等于每天都要人工扫码一次——不可接受。
+
+**现在的做法：用一台校内机器做反向隧道，让抓取请求从校内网发出。**
+
+```
+ECS（校外）                                   校内机器
+  /etc/hosts                                    │
+    lxjw.lixin.edu.cn → 127.0.0.2               │
+  iptables nat                                  │
+    127.0.0.2:443 → 127.0.0.1:18443             │
+  ssh -R 127.0.0.1:18443  ◀────────────────────── 每 5 分钟 cron 保活
+                                                └→ lxjw.lixin.edu.cn:443（校内直连）
+```
+
+三个关键性质：
+
+- **应用代码零改动**：抓取仍访问 `https://lxjw.lixin.edu.cn`，只是解析与路由被改写
+- **TLS 端到端**：隧道只搬 TCP 字节，证书仍由 Node 校验学校的真证书
+  （`CN=*.lixin.edu.cn`，SHECA OV Server CA G5）
+- **凭据不离开服务器**：登录仍在 ECS 上完成，校内机器只当网络出口
+
+#### 服务器侧
+
+```bash
+# /etc/hosts
+127.0.0.2   lxjw.lixin.edu.cn
+
+# 443 → 隧道监听口（做成 systemd 单元以便开机自启）
+iptables -t nat -A OUTPUT -d 127.0.0.2 -p tcp --dport 443 \
+  -j REDIRECT --to-ports 18443
+```
+
+> ⚠️ **必须确认应用走的是 `dns.lookup`**（读 `/etc/hosts`）。若代码里用了
+> `dns.resolve4` 之类，会绕过 hosts 直接拿到公网 IP，隧道就失效了。
+> 可用 `node -e "require('dns').lookup('lxjw.lixin.edu.cn',console.log)"` 验证。
+
+#### 校内机器侧
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/lxjw_tunnel_ed25519
+
+# cron：每 5 分钟跑一次看门狗，幂等
+*/5 * * * * $HOME/bin/lxjw-tunnel.sh
+```
+
+看门狗实质就是一条常驻的 `ssh -R`：
+
+```bash
+ssh -i ~/.ssh/lxjw_tunnel_ed25519 -N \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -R 127.0.0.1:18443:lxjw.lixin.edu.cn:443 lxjw-tunnel@<ECS>
+```
+
+#### 隧道账号必须最小权限
+
+校内机器往往是**多人共用账号**，它的密钥绝不能拿到 ECS 的 root：
+
+```bash
+# ECS：建受限用户 + 限制型公钥
+useradd --system --create-home --shell /usr/sbin/nologin lxjw-tunnel
+# ~lxjw-tunnel/.ssh/authorized_keys:
+#   restrict,port-forwarding ssh-ed25519 AAAA...
+
+# /etc/ssh/sshd_config 末尾
+Match User lxjw-tunnel
+    AllowTcpForwarding remote
+    PermitOpen none
+    PermitTTY no
+```
+
+该账号只能发起**远程端口转发**，不能登录、不能做本地/动态转发；且 `GatewayPorts`
+默认关闭，隧道只能绑 loopback（实测 `-R 127.0.0.2:443` 会被 sshd 改写成
+`127.0.0.1:18443`，正因如此才需要上面那条 iptables）。
+
+#### 验证
+
+```bash
+ip -br a | grep -c utun      # 0（aTrust 已停用）
+ss -ltn | grep 18443         # 隧道在监听
+curl -sk -o /dev/null -w '%{http_code}\n' https://lxjw.lixin.edu.cn/cas/login
+# 期望 302
+```
+
+#### 已知取舍
+
+- 校内机器关机 / 掉线 / 换网络 → 教务抓取失败（`fetch_logs` 里 `ok=0`），
+  机器恢复后看门狗**最多 5 分钟**自愈
+- 这套方案本质上是把「每天人工扫码」换成了「依赖一台校内机器在线」
+- 校内机器上的常驻 `ssh -R` 是一条指向外部服务器的长连接，**在共用机器上属于醒目进程**，
+  部署前请确认这在该机器上是被允许的
+
+#### 附录：aTrust 客户端方案（已停用，保留备查）
+
+2026-10-20 起生产环境已改为上面的校内隧道方案，aTrust 客户端及其依赖的 VNC 已停止，
+配置全部保留，以备不时之需。下面是原始步骤。
+
+<details>
+<summary>点开查看原 aTrust 部署步骤</summary>
+
+
+#### 自部署 aTrust 客户端（服务器侧，必读）
 
 学校自 2026-09-20 起为教务系统接入 aTrust 零信任网关，**服务端必须先在服务器上跑起 aTrust 客户端并登录上线**，才能访问 `lxjw.lixin.edu.cn`。以下步骤已在 Alibaba Cloud Linux 3（RHEL 系）+ XFCE + TigerVNC 实测通过。
 
@@ -179,6 +289,8 @@ DISPLAY=:1 HOME=/root /usr/share/sangfor/aTrust/aTrustTray \
 把 VNC、`aTrustDaemon`、核心插件、客户端托盘分别做成 systemd 服务并设 `Restart=always`，避免服务器重启后掉线。
 
 > aTrust 会话有有效期，掉线后需重新登录（VNC 连上去扫一次码即可）。
+
+</details>
 
 ## 免责声明
 
