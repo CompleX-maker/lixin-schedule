@@ -39,7 +39,19 @@ function gearPath(cx: number, cy: number, teeth: number, rOuter: number, rInner:
   return `${body} Z ${hole} Z`;
 }
 
-/** 全屏齿轮动画：切入协作模式（大齿轮 + 小齿轮反向咬合） */
+/** 旋转层通用样式：交给 GPU 合成，避免每帧重绘 SVG */
+function spinStyle(deg: number, ms: number, easing: string): React.CSSProperties {
+  return {
+    position: "absolute",
+    transformOrigin: "50% 50%",
+    transform: `rotate(${deg}deg)`,
+    transition: `transform ${ms}ms ${easing}`,
+    willChange: "transform",
+    backfaceVisibility: "hidden",
+  };
+}
+
+/** 全屏齿轮动画：切入协作模式 */
 export function GearTransition({ show }: { show: boolean }) {
   const [go, setGo] = useState(false);
   useEffect(() => {
@@ -51,6 +63,12 @@ export function GearTransition({ show }: { show: boolean }) {
     return () => window.clearTimeout(t);
   }, [show]);
 
+  const S = 2.2;              // 120 → 264px
+  const bigD = 64 * S;        // 大齿轮外径 30 → 盒 64
+  const smallD = 42 * S;      // 小齿轮外径 19 → 盒 42
+  const bigAt = { left: 14 * S, top: 14 * S };     // 圆心 (46,46)
+  const smallAt = { left: 59 * S, top: 59 * S };   // 圆心 (80,80)
+
   return (
     <AnimatePresence>
       {show && (
@@ -61,27 +79,39 @@ export function GearTransition({ show }: { show: boolean }) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
         >
-          <svg width="176" height="176" viewBox="0 0 120 120" className="text-primary">
-            <g
+          <div style={{ position: "relative", width: 120 * S, height: 120 * S }}>
+            {/* 大齿轮 */}
+            <div
               style={{
-                transformBox: "view-box", transformOrigin: "46px 46px",
-                transform: go ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 1.15s cubic-bezier(.45,.05,.55,.95)",
+                ...spinStyle(go ? 180 : 0, 1150, "cubic-bezier(.45,.05,.55,.95)"),
+                left: bigAt.left,
+                top: bigAt.top,
+                width: bigD,
+                height: bigD,
               }}
+              className="text-primary"
             >
-              <path d={gearPath(46, 46, 12, 30, 23.5, 8.5)} fill="currentColor" fillRule="evenodd" />
-            </g>
-            <g
+              <svg width="100%" height="100%" viewBox="0 0 64 64">
+                <path d={gearPath(32, 32, 12, 30, 23.5, 8.5)} fill="currentColor" fillRule="evenodd" />
+              </svg>
+            </div>
+            {/* 小齿轮 */}
+            <div
               style={{
-                transformBox: "view-box", transformOrigin: "80px 80px",
-                transform: go ? "rotate(-284deg)" : "rotate(0deg)",
-                transition: "transform 1.15s cubic-bezier(.45,.05,.55,.95)",
+                ...spinStyle(go ? -284 : 0, 1150, "cubic-bezier(.45,.05,.55,.95)"),
+                left: smallAt.left,
+                top: smallAt.top,
+                width: smallD,
+                height: smallD,
                 opacity: 0.5,
               }}
+              className="text-primary"
             >
-              <path d={gearPath(80, 80, 9, 19, 14, 5)} fill="currentColor" fillRule="evenodd" />
-            </g>
-          </svg>
+              <svg width="100%" height="100%" viewBox="0 0 42 42">
+                <path d={gearPath(21, 21, 9, 19, 14, 5)} fill="currentColor" fillRule="evenodd" />
+              </svg>
+            </div>
+          </div>
           <motion.p
             className="mt-8 text-sm text-muted-foreground"
             initial={{ opacity: 0 }}
@@ -96,7 +126,7 @@ export function GearTransition({ show }: { show: boolean }) {
   );
 }
 
-/** 全屏钟表动画：切回个人模式（指针先慢、中间加速、末尾减速） */
+/** 全屏钟表动画：切回个人模式（指针慢-快-慢） */
 export function ClockTransition({ show }: { show: boolean }) {
   const [go, setGo] = useState(false);
   useEffect(() => {
@@ -108,6 +138,8 @@ export function ClockTransition({ show }: { show: boolean }) {
     return () => window.clearTimeout(t);
   }, [show]);
 
+  const SIZE = 176;
+
   return (
     <AnimatePresence>
       {show && (
@@ -118,40 +150,39 @@ export function ClockTransition({ show }: { show: boolean }) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
         >
-          <svg width="168" height="168" viewBox="0 0 100 100" className="text-primary">
-            <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" strokeWidth="2.4" opacity="0.8" />
-            {Array.from({ length: 12 }).map((_, i) => (
-              <line
-                key={i}
-                x1="50"
-                y1="8"
-                x2="50"
-                y2={i % 3 === 0 ? 15 : 12}
-                stroke="currentColor"
-                strokeWidth={i % 3 === 0 ? 2.2 : 1.1}
-                opacity={i % 3 === 0 ? 0.9 : 0.4}
-                transform={`rotate(${i * 30} 50 50)`}
-              />
-            ))}
-            <g
+          <div style={{ position: "relative", width: SIZE, height: SIZE }} className="text-primary">
+            {/* 静止的盘面 */}
+            <svg width={SIZE} height={SIZE} viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" strokeWidth="2.4" opacity="0.8" />
+              {Array.from({ length: 12 }).map((_, i) => (
+                <line
+                  key={i}
+                  x1="50"
+                  y1="8"
+                  x2="50"
+                  y2={i % 3 === 0 ? 15 : 12}
+                  stroke="currentColor"
+                  strokeWidth={i % 3 === 0 ? 2.2 : 1.1}
+                  opacity={i % 3 === 0 ? 0.9 : 0.4}
+                  transform={`rotate(${i * 30} 50 50)`}
+                />
+              ))}
+              <circle cx="50" cy="50" r="3.2" fill="currentColor" />
+            </svg>
+            {/* 只旋转指针层 */}
+            <div
               style={{
-                transformBox: "view-box", transformOrigin: "50px 50px",
-                transform: go ? "rotate(360deg)" : "rotate(0deg)",
-                transition: "transform 1.6s cubic-bezier(.75,0,.25,1)",
+                ...spinStyle(go ? 360 : 0, 1600, "cubic-bezier(.75,0,.25,1)"),
+                inset: 0,
+                width: SIZE,
+                height: SIZE,
               }}
             >
-              <line
-                x1="50"
-                y1="50"
-                x2="50"
-                y2="21"
-                stroke="currentColor"
-                strokeWidth="3.2"
-                strokeLinecap="round"
-              />
-            </g>
-            <circle cx="50" cy="50" r="3.2" fill="currentColor" />
-          </svg>
+              <svg width={SIZE} height={SIZE} viewBox="0 0 100 100">
+                <line x1="50" y1="50" x2="50" y2="21" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
           <motion.p
             className="mt-8 text-sm text-muted-foreground"
             initial={{ opacity: 0 }}
@@ -366,6 +397,7 @@ export function CollabPanel({
   const [lastInvite, setLastInvite] = useState<{ link: string; studentId: string } | null>(null);
   const [confirmInvite, setConfirmInvite] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<Partner | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<any | null>(null);
   const [cfgOpen, setCfgOpen] = useState(false);
   const [tolerance, setTolerance] = useState(0);
   const [editing, setEditing] = useState<Course | null>(null);
@@ -394,6 +426,16 @@ export function CollabPanel({
     onError: (e) => {
       setConfirmInvite(false);
       toast.error(e.message);
+    },
+  });
+
+  const sent = trpc.collab.sent.useQuery(undefined, { enabled: open });
+  const revoke = trpc.collab.revoke.useMutation({
+    onSuccess: () => {
+      utils.collab.sent.invalidate();
+      utils.collab.state.invalidate();
+      setConfirmRevoke(null);
+      toast.success("已撤回邀请");
     },
   });
 
@@ -519,6 +561,30 @@ export function CollabPanel({
                 </motion.div>
               )}
             </section>
+
+            {(sent.data?.length ?? 0) > 0 && (
+              <section className="rounded-2xl border p-4">
+                <SectionTitle hint="等待对方确认">已发出的邀请</SectionTitle>
+                <div className="space-y-2">
+                  {(sent.data as any[]).map((iv) => (
+                    <div key={iv.inviteId} className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5">
+                      <Initial name={iv.toName ?? iv.toStudentId ?? "?"} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{iv.toName ?? "未注册同学"}</p>
+                        <p className="text-[11px] text-muted-foreground">{iv.toStudentId}</p>
+                      </div>
+                      <button
+                        className="shrink-0 rounded-lg border px-3 py-1.5 text-xs text-muted-foreground"
+                        onClick={() => setConfirmRevoke(iv)}
+                      >
+                        撤回
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">学号输错了？点「撤回」即可取消这条邀请</p>
+              </section>
+            )}
 
             <section className="rounded-2xl border p-4">
               <button className="flex w-full items-center justify-between" onClick={() => setCfgOpen((v) => !v)}>
@@ -713,6 +779,17 @@ export function CollabPanel({
             pending={remove.isPending}
             onCancel={() => setConfirmRemove(null)}
             onConfirm={() => confirmRemove && remove.mutate({ inviteId: confirmRemove.inviteId })}
+          />
+
+          <ConfirmDialog
+            open={!!confirmRevoke}
+            title={`撤回给 ${confirmRevoke?.toName ?? confirmRevoke?.toStudentId ?? ""} 的邀请？`}
+            description="撤回后对方不会再收到这条邀请，可以重新输入学号再发一次。"
+            confirmText="撤回邀请"
+            danger
+            pending={revoke.isPending}
+            onCancel={() => setConfirmRevoke(null)}
+            onConfirm={() => confirmRevoke && revoke.mutate({ inviteId: confirmRevoke.inviteId })}
           />
 
           <AnimatePresence>

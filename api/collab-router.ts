@@ -136,6 +136,37 @@ export const collabRouter = createRouter({
       return { ok: true as const, registered: true as const, name: peer.name, token };
     }),
 
+  /** 我发出的、还没被处理的邀请（可撤回） */
+  sent: authedQuery.query(async ({ ctx }) => {
+    const res: any = await getDb().execute(sql`
+      SELECT id, toStudentId, toUserId, token, createdAt
+      FROM collab_invites
+      WHERE fromUserId = ${ctx.user.id} AND status = 'pending'
+      ORDER BY createdAt DESC LIMIT 20
+    `);
+    const list: any[] = [];
+    for (const r of rowsOf(res)) {
+      list.push({
+        inviteId: Number(r.id),
+        toStudentId: r.toStudentId,
+        toName: r.toUserId ? await nameOf(Number(r.toUserId)) : null,
+        createdAt: r.createdAt,
+      });
+    }
+    return list;
+  }),
+
+  /** 撤回自己发出的邀请（仅 pending 状态可撤） */
+  revoke: authedQuery
+    .input(z.object({ inviteId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await getDb().execute(sql`
+        DELETE FROM collab_invites
+        WHERE id = ${input.inviteId} AND fromUserId = ${ctx.user.id} AND status = 'pending'
+      `);
+      return { ok: true as const };
+    }),
+
   accept: authedQuery
     .input(z.object({ token: z.string().min(8).max(64) }))
     .mutation(async ({ ctx, input }) => {
