@@ -321,7 +321,12 @@ function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void
   const guestTabs = TABS.filter((t) => t.key !== "mine");
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-28">
+    <div
+      className={`mx-auto flex max-w-lg flex-col pb-28 ${
+        tab === "week" ? "h-screen overflow-hidden" : "min-h-screen"
+      }`}
+      style={tab === "week" ? { height: "100dvh" } : undefined}
+    >
       <header className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-black">
@@ -335,10 +340,11 @@ function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void
 
       <GuestBanner onLogin={onLogin} onBack={onBack} />
 
-      <main className="flex-1 px-4 py-4">
+      <main className="flex min-h-0 flex-1 flex-col px-4 py-4">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={tab}
+            className="flex min-h-0 flex-1 flex-col"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -350,7 +356,8 @@ function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void
             )}
             {tab === "square" && <SquarePanel readonly onNeedLogin={onLogin} />}
 
-            {/* 游客模式下的引导卡片 */}
+            {/* 游客模式下的引导卡片（课表页让位给网格，不显示） */}
+            {tab !== "week" && (
             <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
               <h3 className="text-sm font-semibold">登录后可以做什么</h3>
               <ul className="mt-2 space-y-1 text-[11px] leading-relaxed text-muted-foreground">
@@ -363,8 +370,9 @@ function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void
                 立即登录
               </Button>
             </section>
+            )}
 
-            <Footer />
+            {tab !== "week" && <Footer />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -455,7 +463,12 @@ function AuthedApp() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col pb-28">
+    <div
+      className={`mx-auto flex max-w-lg flex-col pb-28 ${
+        tab === "week" ? "h-screen overflow-hidden" : "min-h-screen"
+      }`}
+      style={tab === "week" ? { height: "100dvh" } : undefined}
+    >
       <header className="sticky top-0 z-30 border-b bg-background/90 px-4 py-3 backdrop-blur">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-black">
@@ -469,7 +482,7 @@ function AuthedApp() {
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-4">
+      <main className="flex min-h-0 flex-1 flex-col px-4 py-4">
         {inboxCount > 0 && !collabOpen && (
           <button
             onClick={enterCollab}
@@ -481,6 +494,7 @@ function AuthedApp() {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={tab}
+            className="flex min-h-0 flex-1 flex-col"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -505,7 +519,7 @@ function AuthedApp() {
                 和同学看共同空闲
               </button>
             )}
-            <Footer />
+            {tab !== "week" && <Footer />}
             <AnnouncementPopup />
           </motion.div>
         </AnimatePresence>
