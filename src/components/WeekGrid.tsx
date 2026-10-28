@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 
 /** 一行（一小节）的最高/最低像素：低于这个数就没法放字了，宁可让外层滚动 */
 const ROW_MAX = 64;
-const ROW_MIN = 28;
+const ROW_MIN = 24;
 
 export function WeekGrid({
   courses,
@@ -379,7 +379,7 @@ export function WeekGrid({
                         >
                           {c.courseName}
                         </div>
-                        {cspan >= 2 && (
+                        {cspan >= 2 && rowH >= 30 && (
                           <div className="mt-0.5 shrink-0 text-[9px] leading-none tnum opacity-80">
                             {start}
                           </div>

@@ -12,13 +12,20 @@ import { Eye, LogIn, ArrowLeft } from "lucide-react";
 export function GuestBanner({
   onLogin,
   onBack,
+  dense,
 }: {
   onLogin: () => void;
   /** 返回登录页 */
   onBack?: () => void;
+  /** 紧凑模式：课表页要用满屏高度，横幅只留一行 */
+  dense?: boolean;
 }) {
   return (
-    <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+    <div
+      className={`border-b border-amber-500/30 bg-amber-500/10 px-4 ${
+        dense ? "py-1" : "py-2.5"
+      }`}
+    >
       <div className="mx-auto flex max-w-lg items-center gap-2.5">
         <Eye className="h-4 w-4 shrink-0 text-amber-600" />
 
@@ -26,9 +33,11 @@ export function GuestBanner({
           <p className="text-xs font-medium text-amber-700 dark:text-amber-500">
             预览模式 · 示例数据
           </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            登录后会同步你自己的真实课表
-          </p>
+          {!dense && (
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              登录后会同步你自己的真实课表
+            </p>
+          )}
         </div>
 
         {onBack && (

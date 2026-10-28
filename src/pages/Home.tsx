@@ -338,7 +338,7 @@ function GuestApp({ onLogin, onBack }: { onLogin: () => void; onBack: () => void
         </div>
       </header>
 
-      <GuestBanner onLogin={onLogin} onBack={onBack} />
+      <GuestBanner onLogin={onLogin} onBack={onBack} dense={tab === "week"} />
 
       <main className="flex min-h-0 flex-1 flex-col px-4 py-4">
         <AnimatePresence mode="wait" initial={false}>
