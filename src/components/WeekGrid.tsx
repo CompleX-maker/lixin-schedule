@@ -131,7 +131,10 @@ export function WeekGrid({
     return m;
   }, [visible]);
 
-  const COLS = "30px repeat(7, minmax(0, 1fr))";
+  /* 周末有没有课：整学期任何一周在周六/周日有课才显示这两列，
+     否则只画周一到周五 —— 5 列比 7 列每列宽 ~20px，课名不容易折行 */
+  const activeDays = useMemo(() => (courses.some((c) => c.dayOfWeek > 5) ? 7 : 5), [courses]);
+  const COLS = `30px repeat(${activeDays}, minmax(0, 1fr))`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -268,7 +271,7 @@ export function WeekGrid({
             style={{ gridTemplateColumns: COLS }}
           >
             <div className="p-1" />
-            {Array.from({ length: 7 }, (_, i) => {
+            {Array.from({ length: activeDays }, (_, i) => {
               const d = i + 1;
               const date = new Date(monday.getTime() + i * 86400000);
               const isToday = week === currentWeek && d === todayDow;
@@ -327,14 +330,14 @@ export function WeekGrid({
               );
             })}
             {/* 背景空格子（边框） */}
-            {Array.from({ length: periodCount * 7 }, (_, i) => {
-              const row = Math.floor(i / 7) + 1;
-              const col = (i % 7) + 2;
+            {Array.from({ length: periodCount * activeDays }, (_, i) => {
+              const row = Math.floor(i / activeDays) + 1;
+              const col = (i % activeDays) + 2;
               return (
                 <div
                   key={`c${i}`}
                   style={{ gridColumn: col, gridRow: row }}
-                  className={col === 8 ? "border-b" : "border-b border-r"}
+                  className={col === activeDays + 1 ? "border-b" : "border-b border-r"}
                 />
               );
             })}
