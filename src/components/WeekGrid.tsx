@@ -16,10 +16,6 @@ import { trpc } from "@/providers/trpc";
 import { ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/** 一行（一小节）的最高/最低像素：低于这个数就没法放字了，宁可让外层滚动 */
-const ROW_MAX = 64;
-const ROW_MIN = 24;
-
 export function WeekGrid({
   courses,
   config,
@@ -91,34 +87,10 @@ export function WeekGrid({
 
   const periodCount = config.periodTimes.length;
 
-  /* 一屏显示：量出网格可用高度，按节次数均分每行高度。
-     之前行高写死 54px，13 节 = 702px，手机上必然要滚；
-     现在跟着视口走，屏幕高就松、屏幕矮就紧，矮到放不下才允许滚动。 */
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [rowH, setRowH] = useState(54);
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el || week === 0) return;
-    const recalc = () => {
-      // 扣掉表头（星期那行）和边框，剩下的才是 13 个小节的可用高度
-      const head = el.querySelector("[data-grid-head]") as HTMLElement | null;
-      const headH = head?.offsetHeight ?? 0;
-      const avail = el.clientHeight - headH - 2;
-      const h = Math.floor(avail / Math.max(periodCount, 1));
-      setRowH(Math.min(ROW_MAX, Math.max(ROW_MIN, h)));
-    };
-    recalc();
-    const ro = new ResizeObserver(recalc);
-    ro.observe(el);
-    const onWin = () => recalc();
-    window.addEventListener("resize", onWin);
-    window.addEventListener("orientationchange", onWin);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", onWin);
-      window.removeEventListener("orientationchange", onWin);
-    };
-  }, [periodCount, week]);
+  /* 周末有没有课：整个学期周六周日都没课，就只画周一到周五，
+     横向宽出来的部分平摊给工作日，课名不容易折行 */
+  const activeDays = useMemo(() => (courses.some((c) => c.dayOfWeek > 5) ? 7 : 5), [courses]);
+  const COLS = `34px repeat(${activeDays}, minmax(0, 1fr))`;
 
   /** 按（星期, 起始节）分组：同槽多门课并列显示；块按节次跨行 */
   const slotMap = useMemo(() => {
@@ -131,15 +103,10 @@ export function WeekGrid({
     return m;
   }, [visible]);
 
-  /* 周末有没有课：整学期任何一周在周六/周日有课才显示这两列，
-     否则只画周一到周五 —— 5 列比 7 列每列宽 ~20px，课名不容易折行 */
-  const activeDays = useMemo(() => (courses.some((c) => c.dayOfWeek > 5) ? 7 : 5), [courses]);
-  const COLS = `30px repeat(${activeDays}, minmax(0, 1fr))`;
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {/* 周切换（第 1 周左边是课程总览） */}
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="flex items-center justify-between">
         <Button
           variant="ghost"
           size="icon"
@@ -183,11 +150,8 @@ export function WeekGrid({
         </Button>
       </div>
 
-      {/* 课表网格：一屏铺满，放不下才滚动；切周时整体滑动过渡 */}
-      <div
-        ref={boxRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border bg-card"
-      >
+      {/* 课表网格：横向可滚动；切周时整体滑动过渡 */}
+      <div className="overflow-hidden rounded-xl border bg-card">
         <AnimatePresence mode="popLayout" initial={false} custom={dirRef.current}>
           <motion.div
             key={week}
@@ -196,7 +160,7 @@ export function WeekGrid({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -48 * (dirRef.current || 1) }}
             transition={{ duration: 0.26, ease: "easeOut" }}
-            className={week === 0 ? "" : "h-full"}
+            className={week === 0 ? "" : "overflow-x-auto"}
           >
         {week === 0 ? (
           /* 课程总览：按课程分组的全部安排 */
@@ -263,11 +227,10 @@ export function WeekGrid({
             )}
           </div>
         ) : (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="w-full">
           {/* 表头：星期 */}
           <div
-            data-grid-head
-            className="sticky top-0 z-20 grid shrink-0 border-b bg-card"
+            className="grid border-b"
             style={{ gridTemplateColumns: COLS }}
           >
             <div className="p-1" />
@@ -278,21 +241,15 @@ export function WeekGrid({
               return (
                 <div
                   key={d}
-                  className={`flex items-center justify-center py-1.5 text-center ${
-                    isToday ? "text-primary-foreground" : ""
-                  }`}
+                  className={`py-2 text-center ${isToday ? "text-primary-foreground" : ""}`}
                 >
                   <div
-                    className={`flex w-full max-w-[60px] flex-col rounded-lg py-0.5 ${
+                    className={`mx-auto flex w-12 flex-col rounded-lg py-0.5 ${
                       isToday ? "bg-primary" : ""
                     }`}
                   >
-                    <span className="text-[11px] font-semibold leading-tight">{dayLabel(d)}</span>
-                    <span
-                      className={`text-[10px] leading-tight tnum ${
-                        isToday ? "opacity-80" : "text-muted-foreground"
-                      }`}
-                    >
+                    <span className="text-[11px] font-semibold">{dayLabel(d)}</span>
+                    <span className={`text-[10px] tnum ${isToday ? "opacity-80" : "text-muted-foreground"}`}>
                       {fmtDate(date)}
                     </span>
                   </div>
@@ -303,11 +260,10 @@ export function WeekGrid({
 
           {/* 网格主体：每一小节一行，课程块按节次跨行 */}
           <div
-            className="grid min-h-0 flex-1"
+            className="grid"
             style={{
               gridTemplateColumns: COLS,
-              gridTemplateRows: `repeat(${periodCount}, minmax(0, 1fr))`,
-              minHeight: periodCount * ROW_MIN + 2,
+              gridTemplateRows: `repeat(${periodCount}, 54px)`,
             }}
           >
             {/* 左侧节次 + 起止时间 */}
@@ -317,15 +273,13 @@ export function WeekGrid({
                 <div
                   key={`t${i}`}
                   style={{ gridColumn: 1, gridRow: i + 1 }}
-                  className="flex flex-col items-center justify-center overflow-hidden border-b border-r leading-none text-muted-foreground"
+                  className="flex flex-col items-center justify-center border-b border-r text-muted-foreground"
                 >
-                  <span className="text-[11px] font-semibold leading-none tnum">{i + 1}</span>
-                  <span className="mt-0.5 text-[9px] leading-none tnum">{start}</span>
-                  {rowH >= 34 && (
-                    <span className="mt-0.5 text-[9px] leading-none tnum opacity-55">
-                      {start ? periodEnd(start) : ""}
-                    </span>
-                  )}
+                  <span className="text-[11px] font-semibold tnum">{i + 1}</span>
+                  <span className="text-[9px] leading-tight tnum">{start}</span>
+                  <span className="text-[9px] leading-tight tnum opacity-60">
+                    {start ? periodEnd(start) : ""}
+                  </span>
                 </div>
               );
             })}
@@ -349,7 +303,7 @@ export function WeekGrid({
                 <div
                   key={key}
                   style={{ gridColumn: d + 1, gridRow: `${s} / span ${span}` }}
-                  className="z-10 flex min-w-0 gap-0.5 p-0.5"
+                  className="z-10 flex gap-0.5 p-0.5"
                 >
                   {slot.map((c) => {
                     const col = courseColor(c.courseName);
@@ -362,7 +316,7 @@ export function WeekGrid({
                       <button
                         key={c.id}
                         onClick={() => setSelected(c)}
-                        className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border-l-[3px] px-1 py-0.5 text-left transition-transform active:scale-95"
+                        className="relative min-w-0 flex-1 overflow-hidden rounded-md border-l-[3px] px-1 py-1 text-left transition-transform active:scale-95"
                         style={{ background: col.bg, borderColor: col.border, color: col.text }}
                       >
                         <span className="absolute right-0.5 top-0.5 flex items-center gap-0.5">
@@ -376,19 +330,15 @@ export function WeekGrid({
                           )}
                         </span>
                         <div
-                          className={`min-w-0 text-[10px] font-semibold leading-[1.15] break-words ${
+                          className={`text-[10px] font-semibold leading-tight ${
                             cspan >= 3 ? "line-clamp-4" : cspan === 2 ? "line-clamp-3" : "line-clamp-2"
                           }`}
                         >
                           {c.courseName}
                         </div>
-                        {cspan >= 2 && rowH >= 30 && (
-                          <div className="mt-0.5 shrink-0 text-[9px] leading-none tnum opacity-80">
-                            {start}
-                          </div>
-                        )}
-                        {c.location && cspan >= 2 && rowH >= 34 && (
-                          <div className="mt-0.5 line-clamp-2 shrink-0 text-[9px] leading-[1.2] opacity-75">
+                        <div className="mt-0.5 text-[9px] tnum opacity-80">{start}</div>
+                        {c.location && cspan >= 2 && (
+                          <div className="line-clamp-2 text-[9px] leading-tight opacity-75">
                             {c.location}
                           </div>
                         )}
