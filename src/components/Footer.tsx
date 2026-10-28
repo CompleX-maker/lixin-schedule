@@ -1,4 +1,5 @@
 import { GITHUB_URL, ICP_LICENSE, ICP_URL, POLICE_LICENSE, POLICE_URL } from "@/const";
+import { UpdateLogEntry } from "@/components/UpdateLog";
 import { Github, Star } from "lucide-react";
 
 /**
@@ -26,7 +27,11 @@ export function Footer() {
         </span>
       </a>
 
-      <span className="text-[11px] opacity-70">Designed by 初晓</span>
+      <span className="flex items-center gap-2 text-[11px] opacity-70">
+        <UpdateLogEntry />
+        <span className="opacity-40">·</span>
+        <span>Designed by 初晓</span>
+      </span>
 
       {/* 备案信息 */}
       {(ICP_LICENSE || POLICE_LICENSE) && (
