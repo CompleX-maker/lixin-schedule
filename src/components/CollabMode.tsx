@@ -464,6 +464,11 @@ export function CollabPanel({
   const othersCourses: Course[][] = ((multi.data?.partners as any[]) ?? []).map(
     (p: any) => (p.courses ?? []) as Course[],
   );
+  /* 有人这周上周末课才列周六周日，跟课表页保持一致 */
+  const hasWeekendCourse = [myApplied, ...othersCourses].some((list) =>
+    list.some((c) => c.dayOfWeek > 5 && !!courseClock(c, week)),
+  );
+  const collabDays = hasWeekendCourse ? 7 : 5;
 
   const copy = async (text: string) => {
     try {
@@ -673,10 +678,18 @@ export function CollabPanel({
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold tracking-tight">
-                      {chosen.length === 1 ? "两人共同空闲" : `${chosen.length + 1} 人共同空闲`}
+                      {mode === "theirs" && chosen.length === 1
+                        ? `${chosenPartners[0]?.name ?? "ta"} 的课表`
+                        : chosen.length === 1
+                          ? "两人共同空闲"
+                          : `${chosen.length + 1} 人共同空闲`}
                     </h3>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {tolerance === 0 ? "所有人都没课的时间段" : `最多允许 ${tolerance} 人有课`}
+                      {mode === "theirs" && chosen.length === 1
+                        ? "这一周要上的课，含节次、时间、教室"
+                        : tolerance === 0
+                          ? "所有人都没课的时间段"
+                          : `最多允许 ${tolerance} 人有课`}
                     </p>
                   </div>
                   {chosen.length === 1 && (
@@ -687,6 +700,7 @@ export function CollabPanel({
                   )}
                 </div>
 
+                  {!(mode === "theirs" && chosen.length === 1) && (
                   <div className="mb-2 flex items-center gap-1 rounded-xl border p-0.5 text-[11px]">
                     {[0, 1, 2].map((t) => (
                       <button
@@ -698,29 +712,68 @@ export function CollabPanel({
                       </button>
                     ))}
                   </div>
+                  )}
                 {mode === "theirs" && chosen.length === 1 ? (
-                  <div className="divide-y rounded-xl border">
-                    {othersCourses[0]?.length ? (
-                      othersCourses[0]
-                        .slice()
-                        .filter((c) => courseClock(c, week))
-                        .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startSection - b.startSection)
-                        .map((c, i) => {
-                          const clk = courseClock(c, week)!;
+                  (() => {
+                    const list = (othersCourses[0] ?? [])
+                      .filter((c) => courseClock(c, week))
+                      .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startSection - b.startSection);
+                    if (!list.length) {
+                      return (
+                        <p className="rounded-xl border p-4 text-sm text-muted-foreground">
+                          ta 这周没有课表数据
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="space-y-2">
+                        {Array.from({ length: collabDays }, (_, i) => i + 1).map((day) => {
+                          const ofDay = list.filter((c) => c.dayOfWeek === day);
                           return (
-                            <div key={i} className="flex items-center gap-3 px-3 py-2.5 text-sm">
-                              <span className="w-9 shrink-0 text-xs text-muted-foreground">{DAY_LABEL[c.dayOfWeek - 1]}</span>
-                              <span className="text-xs font-medium text-primary">{clk.startStr}–{clk.endStr}</span>
+                            <div key={day} className="rounded-xl border bg-muted/25 p-2">
+                              <div className="flex items-center justify-between px-1">
+                                <span className="text-xs font-semibold">{DAY_LABEL[day - 1]}</span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  {ofDay.length ? `${ofDay.length} 门` : "没课"}
+                                </span>
+                              </div>
+                              {ofDay.length > 0 && (
+                                <div className="mt-1.5 space-y-1">
+                                  {ofDay.map((c, i) => {
+                                    const clk = courseClock(c, week)!;
+                                    return (
+                                      <div
+                                        key={i}
+                                        className="rounded-lg border-l-[3px] border-primary/60 bg-background/70 px-2 py-1.5"
+                                      >
+                                        <div className="flex items-baseline gap-2">
+                                          <span className="min-w-0 flex-1 truncate text-xs font-semibold">
+                                            {c.courseName}
+                                          </span>
+                                          <span className="shrink-0 text-[10px] font-medium text-primary tnum">
+                                            {clk.startStr}–{clk.endStr}
+                                          </span>
+                                        </div>
+                                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                          <span className="tnum">
+                                            第 {c.startSection}-{c.endSection} 节
+                                          </span>
+                                          {c.location && <span className="truncate">· {c.location}</span>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
-                        })
-                    ) : (
-                      <p className="p-4 text-sm text-muted-foreground">ta 这周没有课表数据</p>
-                    )}
-                  </div>
+                        })}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="space-y-2">
-                    {DAY_LABEL.map((label, idx) => {
+                    {DAY_LABEL.slice(0, collabDays).map((label, idx) => {
                       const day = idx + 1;
                       const slots = commonFree(myApplied, othersCourses, week, day, tolerance);
                       return (
