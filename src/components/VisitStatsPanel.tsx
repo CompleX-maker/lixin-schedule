@@ -35,7 +35,7 @@ export function VisitStatsPanel() {
             访问统计
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            仅管理员可见 · 同一人 5 分钟内去重 · 不记录 IP
+            仅管理员可见 · 只统计登录用户（游客预览不计）· 同一人 5 分钟内去重 · 不记录 IP
           </p>
         </div>
         <Button
@@ -57,6 +57,11 @@ export function VisitStatsPanel() {
             累计访问人数
           </div>
           <div className="tnum mt-1 text-xl font-bold">{overview.uniqueUsers}</div>
+          {overview.totalUsers ? (
+            <div className="mt-0.5 text-[10px] text-muted-foreground tnum">
+              全部注册 {overview.totalUsers} 人
+            </div>
+          ) : null}
         </div>
         <div className="rounded-lg border bg-muted/30 p-2.5">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">

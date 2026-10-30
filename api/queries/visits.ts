@@ -80,10 +80,14 @@ export async function visitOverview() {
     })
     .from(schema.visitLogs);
 
+  // 全站注册用户数：用来对照「访问过的人数」和「总人数」的差距
+  const totalRows = await db.select({ n: count() }).from(schema.users);
+
   const r = rows.at(0);
   return {
     totalVisits: Number(r?.totalVisits ?? 0),
     uniqueUsers: Number(r?.uniqueUsers ?? 0),
+    totalUsers: Number(totalRows.at(0)?.n ?? 0),
   };
 }
 
