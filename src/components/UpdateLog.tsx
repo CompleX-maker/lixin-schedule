@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 
 /** 面向同学的更新日志（不写技术细节，只讲能看到的变化） */
@@ -29,12 +30,12 @@ const ENTRIES: Entry[] = [
     emoji: "🤝",
     tag: "新功能",
     items: [
-      "在「今日」页最下面点「和同学看共同空闲」，就能看到你们**都没课**的时间段，不用再来回问",
+      "在「今日」页最下面点「和同学看共同空闲」，就能看到你们都没课的时间段，不用再来回问",
       "切到「看 ta 的」可以直接看对方这一周的课表：课名、第几节、起止时间、在哪个教室",
       "可以同时带上好几个同学（最多 30 人），一起找大家都空的时间",
       "空闲直接显示成钟点，比如 08:30–10:20，比「第几节」直观",
       "人多了不好约？可以放宽到「容忍 1～2 人有课」，先把大块时间圈出来",
-      "学号输错了不要紧，发出去的邀请可以**撤回**重发",
+      "学号输错了不要紧，发出去的邀请可以撤回重发",
       "对方还没注册也没关系，会给你一条邀请链接，直接发群里让 ta 点开就行",
     ],
   },
@@ -91,68 +92,73 @@ export function UpdateLogEntry() {
         更新日志
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setOpen(false)}
-          >
+      {/* 挂到 body：父级是带动画的 motion.div，会形成 transform 包含块，
+          fixed 与 z-index 都会被关在里面，导致背景透出、被底部 dock 盖住 */}
+      {createPortal(
+        <AnimatePresence>
+          {open && (
             <motion.div
-              className="max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-background p-5 shadow-xl sm:rounded-3xl"
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 30, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 34 }}
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-black tracking-tight">更新日志</h2>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">最近给课表加了什么</p>
+              <motion.div
+                className="max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border bg-card p-5 shadow-2xl sm:rounded-3xl"
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 30, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 34 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-black tracking-tight">更新日志</h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">最近给课表加了什么</p>
+                  </div>
+                  <button
+                    className="rounded-xl border px-3 py-1.5 text-sm text-muted-foreground"
+                    onClick={() => setOpen(false)}
+                  >
+                    关闭
+                  </button>
                 </div>
-                <button
-                  className="rounded-xl border px-3 py-1.5 text-sm text-muted-foreground"
-                  onClick={() => setOpen(false)}
-                >
-                  关闭
-                </button>
-              </div>
 
-              <div className="space-y-5">
-                {ENTRIES.map((e) => (
-                  <article key={e.date + e.title}>
-                    <div className="mb-1.5 flex items-center gap-2">
-                      {e.emoji && <span className="text-base">{e.emoji}</span>}
-                      <h3 className="text-sm font-bold">{e.title}</h3>
-                      {e.tag && (
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${TAG_STYLE[e.tag]}`}>
-                          {e.tag}
-                        </span>
-                      )}
-                      <span className="ml-auto text-[11px] text-muted-foreground">{e.date}</span>
-                    </div>
-                    <ul className="space-y-1.5 rounded-xl bg-muted/40 p-3 text-[13px] leading-relaxed text-muted-foreground">
-                      {e.items.map((t, i) => (
-                        <li key={i} className="flex gap-2">
-                          <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/60" />
-                          <span>{t}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
+                <div className="space-y-5">
+                  {ENTRIES.map((e) => (
+                    <article key={e.date + e.title}>
+                      <div className="mb-1.5 flex items-center gap-2">
+                        {e.emoji && <span className="text-base">{e.emoji}</span>}
+                        <h3 className="text-sm font-bold">{e.title}</h3>
+                        {e.tag && (
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${TAG_STYLE[e.tag]}`}>
+                            {e.tag}
+                          </span>
+                        )}
+                        <span className="ml-auto text-[11px] text-muted-foreground">{e.date}</span>
+                      </div>
+                      <ul className="space-y-1.5 rounded-xl bg-muted/40 p-3 text-[13px] leading-relaxed text-muted-foreground">
+                        {e.items.map((t, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/60" />
+                            <span>{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
 
-              <p className="mt-5 text-center text-[11px] text-muted-foreground">
-                有想法或遇到 bug，欢迎在「广场」留言
-              </p>
+                <p className="mt-5 text-center text-[11px] text-muted-foreground">
+                  有想法或遇到 bug，欢迎在「广场」留言
+                </p>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </>
   );
 }

@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.16.8] - 2026-11-02
+
+### 修复
+- **更新日志弹层背景透出、被底部导航盖住**：`UpdateLogEntry` 的弹层写在 Footer 里，
+  而 Footer 位于带 `transform` 的 `motion.div` 内——transform 会生成新的包含块，
+  `position: fixed` 于是相对它定位、`z-index` 也被关进同一个堆叠上下文，
+  结果既不铺满屏幕、又压在底部 dock 之下。改用 `createPortal(..., document.body)`
+  渲染到 body，层级提到 `z-[9999]`，遮罩加深到 `bg-black/50`，
+  面板换成不透明的 `bg-card` + 描边
+- 文案里残留的 markdown 星号（`**都没课**`、`**撤回**`）被当普通字符显示出来，已去掉
+
 ## [0.16.7] - 2026-10-30
 
 ### 优化
