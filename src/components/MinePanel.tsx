@@ -1,3 +1,4 @@
+import { SponsorSheet } from "@/components/SponsorSheet";
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ import {
 } from "@/components/ui/select";
 
 export function MinePanel() {
+  // 彩蛋/打赏入口的开关（页面底部那行灰字）
+  const [showSponsor, setShowSponsor] = useState(false);
   const utils = trpc.useUtils();
   const me = trpc.schedule.me.useQuery(undefined, { retry: false });
   const status = trpc.schedule.status.useQuery();
@@ -304,9 +307,17 @@ export function MinePanel() {
         <LogOut className="mr-1 h-4 w-4" />
         退出登录（{me.data?.realName ?? me.data?.name ?? ""}）
       </Button>
-      <p className="pb-2 text-center text-xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         换设备需重新登录 · 密码加密存储
       </p>
+      <button
+        className="w-full pb-4 pt-1 text-center text-[11px] text-muted-foreground/60 underline-offset-2 transition-colors hover:text-muted-foreground hover:underline"
+        onClick={() => setShowSponsor(true)}
+      >
+        觉得有用？请作者喝杯奶茶
+      </button>
+
+      <SponsorSheet open={showSponsor} onClose={() => setShowSponsor(false)} />
     </div>
   );
 }
