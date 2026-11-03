@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { QUIPS } from "@/lib/quips";
 
@@ -42,6 +43,13 @@ export function PokeBuddy({ initialLine, compact = false }: Props) {
   const [poking, setPoking] = useState(false);
   const [custom, setCustom] = useState<string | null>(initialLine ?? null);
 
+  /* 彩蛋：连戳 7 下再冒出赞赏码。
+     不在界面上放任何入口，纯靠"手欠"触发；4 秒没继续戳就清零，
+     免得正常戳着玩的人被弹窗打扰。 */
+  const [showTip, setShowTip] = useState(false);
+  const pokeCount = useRef(0);
+  const pokeTimer = useRef<number | null>(null);
+
   // 外部文案变化时优先展示
   useEffect(() => {
     if (initialLine) setCustom(initialLine);
@@ -49,6 +57,16 @@ export function PokeBuddy({ initialLine, compact = false }: Props) {
 
   const poke = useCallback(() => {
     setPoking(true);
+    pokeCount.current += 1;
+    if (pokeTimer.current) window.clearTimeout(pokeTimer.current);
+    if (pokeCount.current >= 7) {
+      pokeCount.current = 0;
+      setShowTip(true);
+    } else {
+      pokeTimer.current = window.setTimeout(() => {
+        pokeCount.current = 0;
+      }, 4000);
+    }
     setCustom(null);
     setIdx((i) => {
       // 避免连续重复同一条
@@ -108,6 +126,52 @@ export function PokeBuddy({ initialLine, compact = false }: Props) {
         />
       </motion.button>
       <p className="-mt-1 text-[11px] text-muted-foreground">戳一戳我</p>
+
+      {/* 赞赏码弹层：portal 到 body，避免被带动画的祖先关住定位与层级 */}
+      {createPortal(
+        <AnimatePresence>
+          {showTip && (
+            <motion.div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTip(false)}
+            >
+              <motion.div
+                className="w-full max-w-xs overflow-hidden rounded-3xl border bg-card shadow-2xl"
+                initial={{ scale: 0.92, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 8 }}
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src="/static/sponsor.jpg"
+                  alt="赞赏码"
+                  className="block w-full"
+                  draggable={false}
+                />
+                <div className="px-4 pb-4 pt-3 text-center">
+                  <p className="text-sm font-bold">扫这个就行</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    戳了七下才找到这里，手挺欠的（夸你）。
+                    <br />
+                    打赏完全自愿，不解锁任何功能。
+                  </p>
+                  <button
+                    className="mt-3 w-full rounded-xl border py-2 text-xs text-muted-foreground"
+                    onClick={() => setShowTip(false)}
+                  >
+                    收下，关了
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
